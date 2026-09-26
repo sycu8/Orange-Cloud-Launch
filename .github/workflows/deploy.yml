@@ -19,14 +19,17 @@ on:
         required: false
   # workflow_dispatch is preferred. This push path exists because the
   # integration token cannot call the Actions dispatch API. A push only
-  # deploys staging, and only when this workflow file changes.
-  # That staging deploy applies remote D1 migrations before publishing,
-  # including 0003_browser_observation.sql when it is in the tree.
+  # deploys staging (never production). Staging deploy applies remote D1
+  # migrations before publishing (including 0003_browser_observation.sql).
   push:
     branches:
       - main
     paths:
       - .github/workflows/deploy.yml
+      - workers/platform/**
+      - apps/web/**
+      - packages/shared/**
+      - migrations/**
 
 permissions:
   contents: read
