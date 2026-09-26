@@ -20,7 +20,7 @@ OCLaunch **does not bypass WAF or bot challenges**. Cloudflare Browser Run is al
 
 If Browser Run hits a challenge page, OCLaunch records an Access finding and keeps human review as the evidence path.
 5. Create a Review Mission and open the invite as a second user.
-6. Accept findings → create change set → **Export for coding agent**.
+6. Accept findings → start a fix in the improvement studio. A commit SHA is optional. Copy the plain fix note into the tool or chat that edits the project.
 7. Generate a release report and optional redacted share (`/r/:id`).
 8. Product Passport HTML is server-rendered at `/p/:slug` for public/unlisted projects.
 

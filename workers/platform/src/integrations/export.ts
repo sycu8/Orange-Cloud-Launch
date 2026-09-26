@@ -1,4 +1,4 @@
-import type { BrandProfile } from "@oclaunch/shared";
+import { buildPlainFixNote, isConnectedRevision, type BrandProfile } from "@oclaunch/shared";
 
 type EnvLike = { DB: D1Database; ARTIFACTS: R2Bucket };
 
@@ -45,9 +45,31 @@ export async function buildAgentExport(
     if (brand) brandProfile = JSON.parse(brand.profile_json) as BrandProfile;
   }
 
+  const exportedFindings = findings.map((f) => ({
+    id: (f as { id: string }).id,
+    title: (f as { title: string }).title,
+    body: (f as { body: string }).body,
+    category: (f as { category: string }).category,
+    severity: (f as { severity: string }).severity,
+    confidence: (f as { confidence: string }).confidence,
+    provenance: (f as { provenance: string }).provenance,
+    acceptanceCriterion: (f as { acceptance_criterion: string | null }).acceptance_criterion,
+    state: (f as { state: string }).state,
+  }));
+  const baseSha = String(changeSet.base_sha ?? "");
+  const plainPrompt = buildPlainFixNote({
+    projectName: typeof project?.name === "string" ? project.name : null,
+    purpose: typeof project?.purpose === "string" ? project.purpose : null,
+    audience: typeof project?.audience === "string" ? project.audience : null,
+    liveUrl: typeof project?.live_url === "string" ? project.live_url : null,
+    baseSha,
+    findings: exportedFindings,
+  });
+
   return {
     format: "oclaunch.agent-export.v1",
     generatedAt: new Date().toISOString(),
+    plainPrompt,
     instructions: [
       "Inspect the existing repository before editing. Do not invent filenames from a URL-only scan.",
       "Preserve working behavior outside the accepted findings.",
@@ -65,23 +87,13 @@ export async function buildAgentExport(
     },
     changeSet: {
       id: changeSetId,
-      baseSha: changeSet.base_sha,
+      baseSha,
+      connected: isConnectedRevision(baseSha),
       brandVersionId: changeSet.brand_version_id,
     },
     brandProfile,
     brandTokensJson: brandProfile,
-    findings: findings.map((f) => ({
-      id: (f as { id: string }).id,
-      title: (f as { title: string }).title,
-      body: (f as { body: string }).body,
-      category: (f as { category: string }).category,
-      severity: (f as { severity: string }).severity,
-      confidence: (f as { confidence: string }).confidence,
-      provenance: (f as { provenance: string }).provenance,
-      acceptanceCriterion: (f as { acceptance_criterion: string | null })
-        .acceptance_criterion,
-      state: (f as { state: string }).state,
-    })),
+    findings: exportedFindings,
     constraints: {
       supportedAutoPrProfile: "React/Vite + Tailwind",
       unsupportedFallback: "Use this export with the founder’s own coding agent.",

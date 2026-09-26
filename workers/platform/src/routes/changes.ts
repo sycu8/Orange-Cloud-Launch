@@ -14,11 +14,32 @@ changeRoutes.get("/projects/:projectId/changes", async (c) => {
   const role = await requireMember(c, projectId);
   if (!role) return jsonErr(c, "FORBIDDEN", "No access", 403);
   const rows = await c.env.DB.prepare(
-    `SELECT * FROM change_sets WHERE project_id = ? ORDER BY created_at DESC`,
+    `SELECT
+       cs.*,
+       (
+         SELECT f.title
+         FROM change_set_findings csf
+         JOIN findings f ON f.project_id = csf.project_id AND f.id = csf.finding_id
+         WHERE csf.project_id = cs.project_id AND csf.change_set_id = cs.id
+         ORDER BY f.created_at ASC
+         LIMIT 1
+       ) AS lead_title,
+       (
+         SELECT COUNT(*)
+         FROM change_set_findings csf
+         WHERE csf.project_id = cs.project_id AND csf.change_set_id = cs.id
+       ) AS finding_count
+     FROM change_sets cs
+     WHERE cs.project_id = ?
+     ORDER BY cs.created_at DESC`,
   )
     .bind(projectId)
     .all();
-  return jsonOk(c, { changeSets: rows.results ?? [] });
+  const changeSets = (rows.results ?? []).map((row) => ({
+    ...row,
+    finding_count: Number((row as { finding_count?: number | string }).finding_count ?? 0),
+  }));
+  return jsonOk(c, { changeSets });
 });
 
 changeRoutes.get("/projects/:projectId/changes/:changeId", async (c) => {

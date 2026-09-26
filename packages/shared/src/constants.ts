@@ -1,5 +1,8 @@
 export const RULESET_VERSION = "1.0.0";
 
+/** Stored when a founder starts a fix without a commit SHA. */
+export const UNCONNECTED_BASE_SHA = "not-connected";
+
 export const RESERVED_SLUGS = [
   "launch",
   "launch-staging",

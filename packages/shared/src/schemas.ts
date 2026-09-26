@@ -4,6 +4,7 @@ import {
   FINDING_STATES,
   RELEASE_ENVIRONMENTS,
   RESERVED_SLUGS,
+  UNCONNECTED_BASE_SHA,
 } from "./constants.js";
 
 export function isLoopbackHostname(hostname: string): boolean {
@@ -145,7 +146,17 @@ export const createBrandSchema = z.object({
 
 export const createChangeSetSchema = z.object({
   findingIds: z.array(z.string().min(1)).min(1).max(40),
-  baseSha: z.string().min(7).max(64),
+  baseSha: z
+    .string()
+    .max(64)
+    .optional()
+    .transform((value) => {
+      const trimmed = (value ?? "").trim();
+      return trimmed.length === 0 ? UNCONNECTED_BASE_SHA : trimmed;
+    })
+    .refine((value) => value === UNCONNECTED_BASE_SHA || value.length >= 7, {
+      message: "Enter a version code of at least 7 characters, or leave it blank.",
+    }),
   brandVersionId: z.string().optional(),
 });
 

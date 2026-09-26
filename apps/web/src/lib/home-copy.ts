@@ -66,7 +66,7 @@ export const homeEn: Record<string, string> = {
     "Accept a finding you will fix, ask for evidence when the note is too thin, or dismiss it with a reason.",
   "home.howto.6.title": "Export the improvement",
   "home.howto.6.body":
-    "In the improvement studio, propose a change set from accepted findings and export the task bundle for your coding agent. You still ship the change from your own repository.",
+    "In the improvement studio, choose the problems you accepted and copy a fix note. Paste it into the tool that edits your project, or send it to the person who builds it. You do not need a commit code to start. You still publish the change yourself.",
   "home.howto.7.title": "Verify and write the report",
   "home.howto.7.body":
     "After the change is live, mark the finding verified and generate a release report. Capture the next release once this record is in place.",
@@ -224,7 +224,7 @@ export const homeVi: Record<string, string> = {
     "Chấp nhận việc bạn sẽ sửa, yêu cầu bằng chứng khi ghi chú còn mỏng, hoặc bỏ qua kèm lý do.",
   "home.howto.6.title": "Xuất cải tiến",
   "home.howto.6.body":
-    "Trong xưởng cải tiến, đề xuất change set từ các phát hiện đã chấp nhận và xuất gói nhiệm vụ cho coding agent. Bạn vẫn đưa thay đổi lên từ kho mã của mình.",
+    "Trong xưởng cải tiến, chọn các vấn đề đã chấp nhận và sao chép ghi chú sửa. Dán vào công cụ đang sửa dự án, hoặc gửi cho người xây sản phẩm. Bạn không cần mã commit để bắt đầu. Bạn vẫn tự đưa thay đổi lên.",
   "home.howto.7.title": "Xác minh và viết báo cáo",
   "home.howto.7.body":
     "Khi thay đổi đã chạy, đánh dấu phát hiện đã xác minh và tạo báo cáo bản phát hành. Hãy chốt bản sau khi hồ sơ này đã có.",

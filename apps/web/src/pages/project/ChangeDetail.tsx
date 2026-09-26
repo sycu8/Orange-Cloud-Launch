@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useOutletContext, useParams } from "react-router-dom";
+import { buildPlainFixNote, isConnectedRevision } from "@oclaunch/shared";
 import { api } from "../../lib/api";
-import { Button, EmptyState, Input, Label, Notice, StatusPill } from "../../components/ui";
+import { useI18n } from "../../lib/i18n";
+import { Button, EmptyState, Input, Label, Notice, StatusPill, TextArea } from "../../components/ui";
+import type { ProjectDetail } from "./ProjectLayout";
 
 type Finding = {
   id: string;
@@ -26,13 +29,22 @@ type ChangeSet = {
   approved_sha: string | null;
 };
 
+function stateLabel(state: string, t: (key: string) => string) {
+  const key = `changes.state.${state}`;
+  const label = t(key);
+  return label === key ? state.replaceAll("_", " ") : label;
+}
+
 export function ChangeDetailPage() {
   const { id, changeId } = useParams();
+  const { t } = useI18n();
+  const { data: projectData } = useOutletContext<{ data: ProjectDetail }>();
   const [changeSet, setChangeSet] = useState<ChangeSet | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [deployedSha, setDeployedSha] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   async function load() {
     const res = await api<{ changeSet: ChangeSet; findings: Finding[] }>(
@@ -40,246 +52,270 @@ export function ChangeDetailPage() {
     );
     setChangeSet(res.changeSet);
     setFindings(res.findings);
-    if (res.changeSet.head_sha) setDeployedSha(res.changeSet.head_sha);
   }
 
   useEffect(() => {
-    load().catch((e) => setError(e instanceof Error ? e.message : "Failed"));
+    load().catch((e) => setError(e instanceof Error ? e.message : t("changes.loadFailed")));
   }, [id, changeId]);
 
-  async function exportBundle() {
+  const note = useMemo(() => {
+    if (!changeSet) return "";
+    return buildPlainFixNote({
+      projectName: projectData.project.name,
+      purpose: projectData.project.purpose,
+      audience: projectData.project.audience,
+      liveUrl: projectData.project.live_url,
+      baseSha: changeSet.base_sha,
+      findings: findings.map((finding) => ({
+        title: finding.title,
+        body: finding.body,
+        acceptanceCriterion: finding.acceptance_criterion,
+      })),
+    });
+  }, [changeSet, findings, projectData.project]);
+
+  async function copyFixNote() {
     setError(null);
+    setBusy("copy");
     try {
-      const res = await api<{ job: { result_json?: string } }>(
-        `/api/projects/${id}/changes/${changeId}/export`,
-        { method: "POST", body: "{}" },
-      );
-      const parsed = res.job.result_json
-        ? (JSON.parse(res.job.result_json) as { artifactId?: string })
-        : null;
-      setMessage(
-        parsed?.artifactId
-          ? "Agent export ready — copy or download, then paste into your coding agent. Draft PR stays integration_not_configured."
-          : "Export job finished",
-      );
-      await load();
-      if (parsed?.artifactId) {
-        await copyExport();
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
+      await navigator.clipboard.writeText(note);
+      setMessage(t("changes.copied"));
+    } catch {
+      setError(t("changes.copyFailed"));
+    } finally {
+      setBusy(null);
     }
   }
 
-  async function copyExport() {
+  async function savePacket() {
     setError(null);
+    setBusy("packet");
     try {
-      const res = await fetch(`/api/projects/${id}/changes/${changeId}/export-download`, {
-        credentials: "include",
+      await api(`/api/projects/${id}/changes/${changeId}/export`, {
+        method: "POST",
+        body: "{}",
       });
-      if (!res.ok) {
-        throw new Error("Export not ready yet — generate it first.");
-      }
-      const text = await res.text();
-      await navigator.clipboard.writeText(text);
-      setMessage(
-        "Agent export copied. It forbids deleting or rewriting tests to make them pass.",
-      );
+      setMessage(t("changes.packetReady"));
+      await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Copy failed");
+      setError(e instanceof Error ? e.message : t("changes.loadFailed"));
+    } finally {
+      setBusy(null);
     }
   }
 
   async function requestBuild() {
     setError(null);
+    setBusy("preview");
     try {
       const res = await api<{ job: { result_json?: string } }>(
         `/api/projects/${id}/changes/${changeId}/build`,
         { method: "POST", body: "{}" },
       );
       const parsed = res.job.result_json
-        ? (JSON.parse(res.job.result_json) as { status?: string; message?: string })
+        ? (JSON.parse(res.job.result_json) as { status?: string })
         : null;
       if (parsed?.status === "integration_not_configured") {
-        setError(
-          parsed.message ??
-            "Sandbox + GitHub draft PR is not configured. Use agent export, then mark implemented after you ship.",
-        );
+        setError(t("changes.previewBlocked"));
       } else {
-        setMessage("Build requested");
+        setMessage(t("changes.previewRequested"));
       }
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
+      setError(e instanceof Error ? e.message : t("changes.loadFailed"));
+    } finally {
+      setBusy(null);
     }
   }
 
   async function markImplemented() {
     setError(null);
+    setBusy("live");
     try {
-      const res = await api<{ nextAction?: string }>(
-        `/api/projects/${id}/changes/${changeId}/mark-implemented`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            deployedSha: deployedSha || undefined,
-            notes: "Owner marked shipped after applying agent export or external PR.",
-          }),
-        },
-      );
-      setMessage(res.nextAction ?? "Marked implemented");
+      const version = deployedSha.trim();
+      await api(`/api/projects/${id}/changes/${changeId}/mark-implemented`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...(version ? { deployedSha: version } : {}),
+          notes: "Owner marked the fix live.",
+        }),
+      });
+      setMessage(t("changes.markedLive"));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
+      setError(e instanceof Error ? e.message : t("changes.loadFailed"));
+    } finally {
+      setBusy(null);
     }
   }
 
   if (error && !changeSet) {
     return (
-      <Notice title="Change set unavailable" tone="danger">
+      <Notice title={t("changes.unavailable")} tone="danger">
         {error}
       </Notice>
     );
   }
-  if (!changeSet) return <p className="text-muted">Loading change set…</p>;
+  if (!changeSet) return <p className="text-muted">{t("changes.loading")}</p>;
 
   const primaryRelease = findings[0]?.release_id;
+  const title = findings[0]?.title?.trim() || t("changes.untitled");
 
   return (
     <div>
       <p className="text-sm text-muted">
         <Link to={`/app/projects/${id}/changes`} className="text-muted">
-          Improvements
+          {t("changes.back")}
         </Link>{" "}
-        / {changeSet.id}
+        / {title}
       </p>
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold">Change studio</h2>
-          <p className="mt-1 text-sm text-muted">
-            Base {changeSet.base_sha}
-            {changeSet.head_sha ? ` · head ${changeSet.head_sha}` : ""}
-          </p>
+          <h2 className="text-2xl font-bold">{t("changes.fixTitle")}</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted">{t("changes.fixLead")}</p>
         </div>
         <StatusPill
           tone={
-            changeSet.state === "implemented"
+            changeSet.state === "implemented" || changeSet.state === "approved_for_merge"
               ? "positive"
               : changeSet.state === "awaiting_integration"
                 ? "neutral"
                 : "action"
           }
         >
-          {changeSet.state.replaceAll("_", " ")}
+          {stateLabel(changeSet.state, t)}
         </StatusPill>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
-          <h3 className="font-semibold">Shipping contract — coding agent export</h3>
-          <p className="text-sm text-muted">
-            Primary path while Sandbox/GitHub draft PR is not configured. Bundle includes findings,
-            brand tokens, and a ban on deleting or rewriting tests to make them pass.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void exportBundle()}>Generate &amp; copy agent export</Button>
-            {changeSet.export_artifact_id ? (
-              <>
-                <Button variant="secondary" onClick={() => void copyExport()}>
-                  Copy export again
-                </Button>
-                <a href={`/api/projects/${id}/changes/${changeId}/export-download`}>
-                  <Button variant="ghost">Download JSON</Button>
-                </a>
-              </>
-            ) : null}
-          </div>
+      <section className="mt-6">
+        <h3 className="text-lg font-semibold">{t("changes.whatTitle")}</h3>
+        {findings.length === 0 ? (
+          <EmptyState title={t("changes.whatEmptyTitle")} body={t("changes.whatEmptyBody")} />
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {findings.map((finding) => (
+              <li key={finding.id} className="rounded-[16px] border border-border bg-surface p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold">{finding.title}</p>
+                  <StatusPill tone={finding.state === "verified" ? "positive" : "action"}>
+                    {stateLabel(finding.state, t)}
+                  </StatusPill>
+                </div>
+                {finding.body ? (
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{finding.body}</p>
+                ) : null}
+                {finding.acceptance_criterion ? (
+                  <p className="mt-2 text-sm text-muted">
+                    {t("changes.doneWhen")} {finding.acceptance_criterion}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-          <h3 className="pt-4 font-semibold">Sandbox preview / draft PR</h3>
-          <Notice title="integration_not_configured" tone="neutral">
-            Cloudflare Sandbox + GitHub App credentials are required. Export stays the shipping
-            contract until then — this button will not fake a PR.
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <section className="space-y-3 rounded-[16px] border border-border bg-surface p-5">
+          <h3 className="font-semibold">{t("changes.handTitle")}</h3>
+          <p className="text-sm text-muted">{t("changes.handBody")}</p>
+          <Notice title={t("changes.connectTitle")} tone="neutral">
+            {t("changes.connectBody")}
           </Notice>
-          <Button variant="ghost" onClick={() => void requestBuild()}>
-            Request preview / draft PR
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy === "copy" || !note} onClick={() => void copyFixNote()}>
+              {t("changes.copyNote")}
+            </Button>
+            {changeSet.export_artifact_id ? (
+              <a href={`/api/projects/${id}/changes/${changeId}/export-download`}>
+                <Button variant="ghost">{t("changes.download")}</Button>
+              </a>
+            ) : (
+              <Button variant="ghost" disabled={busy === "packet"} onClick={() => void savePacket()}>
+                {t("changes.savePacket")}
+              </Button>
+            )}
+          </div>
+          <Label>{t("changes.noteLabel")}</Label>
+          <TextArea readOnly rows={12} value={note} aria-label={t("changes.noteLabel")} />
+          <p className="text-sm text-muted">{t("changes.noteHint")}</p>
           {changeSet.preview_url || changeSet.pr_url ? (
             <p className="text-sm">
               {changeSet.preview_url ? (
-                <a href={changeSet.preview_url}>Preview</a>
+                <a href={changeSet.preview_url}>{t("changes.openPreview")}</a>
               ) : null}
               {changeSet.pr_url ? (
                 <>
-                  {" "}
-                  · <a href={changeSet.pr_url}>Draft PR</a>
+                  {changeSet.preview_url ? " · " : null}
+                  <a href={changeSet.pr_url}>{t("changes.openDraft")}</a>
                 </>
               ) : null}
             </p>
           ) : null}
-        </div>
+        </section>
 
-        <div className="space-y-3 rounded-[16px] border border-border bg-surface p-5">
-          <h3 className="font-semibold">Close the loop</h3>
-          <p className="text-sm text-muted">
-            After you ship the improvement in your own repo (or merge externally), mark it
-            implemented, then verify against the live release revision.
-          </p>
-          <div>
-            <Label>Deployed commit SHA (optional)</Label>
-            <Input
-              value={deployedSha}
-              onChange={(e) => setDeployedSha(e.target.value)}
-              placeholder="sha after deploy"
-            />
-          </div>
+        <section className="space-y-3 rounded-[16px] border border-border bg-surface p-5">
+          <h3 className="font-semibold">{t("changes.liveTitle")}</h3>
+          <p className="text-sm text-muted">{t("changes.liveBody")}</p>
           <Button
-            disabled={changeSet.state === "implemented"}
+            disabled={changeSet.state === "implemented" || busy === "live"}
             onClick={() => void markImplemented()}
           >
-            {changeSet.state === "implemented" ? "Already implemented" : "Mark implemented"}
+            {changeSet.state === "implemented" ? t("changes.alreadyLive") : t("changes.markLive")}
           </Button>
           {primaryRelease ? (
-            <Link to={`/app/projects/${id}/releases/${primaryRelease}`}>
-              <Button variant="secondary" className="mt-2 w-full sm:w-auto">
-                Verify on release
-              </Button>
+            <Link to={`/app/projects/${id}/releases/${primaryRelease}`} className="block">
+              <Button variant="secondary">{t("changes.checkRelease")}</Button>
             </Link>
           ) : null}
-        </div>
+          <details className="rounded-[16px] border border-border p-4">
+            <summary className="min-h-[44px] cursor-pointer text-sm font-semibold">
+              {t("changes.versionAdd")}
+            </summary>
+            <p className="mt-2 text-sm text-muted">{t("changes.versionAddHelp")}</p>
+            <div className="mt-3">
+              <Input
+                value={deployedSha}
+                onChange={(e) => setDeployedSha(e.target.value)}
+                placeholder={t("changes.versionPh")}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+          </details>
+        </section>
       </div>
 
-      <h3 className="mt-8 text-lg font-semibold">Included findings</h3>
-      {findings.length === 0 ? (
-        <EmptyState title="No findings linked" body="This change set has no findings." />
-      ) : (
-        <ul className="mt-3 space-y-3">
-          {findings.map((f) => (
-            <li key={f.id} className="rounded-[16px] border border-border bg-surface p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold">{f.title}</p>
-                <StatusPill tone={f.state === "verified" ? "positive" : "action"}>
-                  {f.state.replaceAll("_", " ")}
-                </StatusPill>
-                <StatusPill tone="neutral">{f.provenance}</StatusPill>
-              </div>
-              {f.acceptance_criterion ? (
-                <p className="mt-2 text-sm text-muted">Criterion: {f.acceptance_criterion}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
+      <details className="mt-6 rounded-[16px] border border-border bg-surface p-4">
+        <summary className="min-h-[44px] cursor-pointer text-sm font-semibold">
+          {t("changes.tech")}
+        </summary>
+        <div className="mt-3 space-y-3 text-sm text-muted">
+          <p>{t("changes.techBody")}</p>
+          <p>
+            {isConnectedRevision(changeSet.base_sha)
+              ? `${t("changes.versionPrefix")} ${changeSet.base_sha}`
+              : t("changes.unconnected")}
+          </p>
+          <p className="break-all">
+            {t("changes.recordId")} {changeSet.id}
+          </p>
+          <Button variant="ghost" disabled={busy === "preview"} onClick={() => void requestBuild()}>
+            {t("changes.requestPreview")}
+          </Button>
+        </div>
+      </details>
 
       {message ? (
         <div className="mt-6">
-          <Notice title="Update" tone="positive">
+          <Notice title={t("common.update")} tone="positive">
             {message}
           </Notice>
         </div>
       ) : null}
       {error ? (
         <div className="mt-4">
-          <Notice title="Action blocked" tone="danger">
+          <Notice title={t("common.error")} tone="danger">
             {error}
           </Notice>
         </div>
