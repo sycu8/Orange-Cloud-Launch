@@ -79,8 +79,8 @@ bucket_name = "oclaunch-artifacts-staging"
 
 [env.production]
 name = "oclaunch-platform-production"
-workers_dev = false
-# Attach launch.orangecloud.vn here only after detaching it from staging.
+# workers.dev only. launch.orangecloud.vn stays on the staging Worker until it is detached.
+workers_dev = true
 # routes = [{ pattern = "launch.orangecloud.vn", custom_domain = true }]
 [env.production.vars]
 APP_ENV = "production"
