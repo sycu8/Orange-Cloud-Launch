@@ -9,7 +9,7 @@ Copy `.env.example` into `workers/platform/.dev.vars`. Set `SESSION_SECRET` and 
 1. Sign in (dev login or passkey).
 2. **Add your project** (private by default).
 3. Capture a release URL.
-4. Run automated review (deterministic checks always). With `ENABLE_BROWSER_RUN=true` and a `BROWSER` binding, Browser Run acts as a human tester: opens the release URL, discovers same-origin routes, captures desktop/phone snapshots, and records `browser_observation` findings (never labeled as human outcomes).
+4. Run automated review (deterministic checks always). With `ENABLE_BROWSER_RUN=true` and a `BROWSER` binding, Browser Run acts as a human tester: opens the release URL, walks a short same-origin path, captures desktop and phone snapshots, and stores them as ordered first-use workflows (`browser_observation` only — never human outcomes). A bot challenge ends that path.
 
 ### Browser Run vs bot protection
 

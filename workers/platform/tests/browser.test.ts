@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildUserWorkflows,
   discoverFromSnapshot,
   looksLikeBotChallenge,
   runBrowserReview,
@@ -181,6 +182,88 @@ describe("runBrowserReview", () => {
     expect(result.captures.length).toBeGreaterThanOrEqual(2);
     expect(result.findings.every((f) => f.provenance === "browser_observation")).toBe(true);
     expect(result.message).toMatch(/not human review outcomes/i);
+    expect(result.workflows.length).toBe(2);
+    expect(result.workflows[0]?.steps[0]?.outcome).toBe("captured");
+    expect(result.workflows.every((workflow) => workflow.stopped === false)).toBe(true);
     expect(runner).toHaveBeenCalled();
+  });
+
+  it("stops the workflow at a bot challenge and does not open later routes", async () => {
+    const snapshotUrls: string[] = [];
+    const runner = vi.fn(async (action: string, options: Record<string, unknown>) => {
+      if (action === "links") {
+        return {
+          links: [
+            { url: "https://example.com/next" },
+            { url: "https://example.com/later/deep/page" },
+          ],
+        };
+      }
+      const url = String(options.url);
+      snapshotUrls.push(url);
+      if (url.includes("/next")) {
+        return {
+          screenshot: toBase64(TINY_PNG),
+          markdown: "Just a moment... Checking your browser before accessing the site.",
+          meta: { status: 403, title: "Just a moment..." },
+        };
+      }
+      return {
+        screenshot: toBase64(TINY_PNG),
+        markdown: "# Example Domain\n\nWelcome. [Pricing](/pricing)",
+        accessibilityTree: {
+          role: "RootWebArea",
+          name: "Example Domain",
+          children: [
+            { role: "heading", name: "Example Domain", level: 1 },
+            { role: "link", name: "Pricing" },
+            { role: "main", name: "Content", children: [] },
+          ],
+        },
+        meta: { status: 200, title: "Example Domain" },
+      };
+    });
+
+    const result = await runBrowserReview(
+      { ENABLE_BROWSER_RUN: "true" },
+      "https://example.com/",
+      { runner },
+    );
+
+    expect(snapshotUrls.some((url) => url.includes("/later"))).toBe(false);
+    expect(snapshotUrls.some((url) => url.includes("/next"))).toBe(true);
+    const desktop = result.workflows.find((workflow) => workflow.viewportLabel === "1280x800");
+    expect(desktop?.stopped).toBe(true);
+    expect(desktop?.steps.at(-1)?.outcome).toBe("bot_protection");
+    expect(desktop?.steps.some((step) => step.route.includes("later"))).toBe(false);
+  });
+});
+
+describe("buildUserWorkflows", () => {
+  it("orders captures and stops at the challenge step", () => {
+    const workflows = buildUserWorkflows({
+      routes: ["/", "/pricing"],
+      viewports: ["1280x800"],
+      captures: [
+        { route: "/", viewportLabel: "1280x800", pageTitle: "Home" },
+        { route: "/pricing", viewportLabel: "1280x800", pageTitle: "Just a moment..." },
+      ],
+      findings: [
+        {
+          provenance: "browser_observation",
+          category: "Access",
+          severity: "high",
+          confidence: "high",
+          title: "Bot protection blocked Browser Run (/pricing @ 1280x800)",
+          body: "stopped",
+          captureIndex: 1,
+        },
+      ],
+    });
+    expect(workflows[0]?.steps.map((step) => step.outcome)).toEqual([
+      "captured",
+      "bot_protection",
+    ]);
+    expect(workflows[0]?.stopped).toBe(true);
   });
 });

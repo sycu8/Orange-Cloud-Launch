@@ -153,6 +153,7 @@ async function handleReview(
         viewports: [],
         captures: [],
         findings: [],
+        workflows: [],
       }
     : await runBrowserReview(env, release.source_url, { allowLoopback });
   const suggestions = await suggestFindings(env, {
@@ -160,7 +161,7 @@ async function handleReview(
     deterministic,
   });
 
-  const captureArtifactIds: string[] = [];
+  const captureArtifactIds: Array<string | null> = [];
   for (const capture of browser.captures) {
     const artifactId = newId("art");
     const reserved = await reserveArtifactBytes(
@@ -169,7 +170,10 @@ async function handleReview(
       artifactId,
       capture.bytes.byteLength,
     );
-    if (!reserved) continue;
+    if (!reserved) {
+      captureArtifactIds.push(null);
+      continue;
+    }
     const key = `projects/${projectId}/releases/${releaseId}/browser/${artifactId}-${capture.viewportLabel}.png`;
     await env.ARTIFACTS.put(key, capture.bytes, {
       httpMetadata: { contentType: capture.mimeType },
@@ -242,6 +246,55 @@ async function handleReview(
     }
   }
 
+  let workflowArtifactId: string | null = null;
+  if (browser.workflows.length > 0) {
+    const workflowBody = JSON.stringify(
+      {
+        note: "Combined viewport snapshots as ordered first-use workflows. Not human outcomes. Bot challenges stop the path.",
+        sourceUrl: browser.sourceUrl,
+        workflows: browser.workflows.map((workflow) => ({
+          ...workflow,
+          steps: workflow.steps.map((step) => ({
+            ...step,
+            artifactId:
+              step.captureIndex != null ? (captureArtifactIds[step.captureIndex] ?? null) : null,
+          })),
+        })),
+      },
+      null,
+      2,
+    );
+    const workflowId = newId("art");
+    const reserved = await reserveArtifactBytes(
+      env.DB,
+      projectId,
+      workflowId,
+      workflowBody.length,
+    );
+    if (reserved) {
+      const key = `projects/${projectId}/releases/${releaseId}/browser/${workflowId}-workflow.json`;
+      await env.ARTIFACTS.put(key, workflowBody, {
+        httpMetadata: { contentType: "application/json" },
+      });
+      const hash = await sha256Hex(workflowBody);
+      await env.DB.prepare(
+        `INSERT INTO artifacts (id, project_id, release_id, r2_key, sha256, mime_type, size_bytes, created_at)
+         VALUES (?, ?, ?, ?, ?, 'application/json', ?, ?)`,
+      )
+        .bind(
+          workflowId,
+          projectId,
+          releaseId,
+          key,
+          hash,
+          workflowBody.length,
+          new Date().toISOString(),
+        )
+        .run();
+      workflowArtifactId = workflowId;
+    }
+  }
+
   return {
     status: "completed",
     findingIds,
@@ -253,7 +306,18 @@ async function handleReview(
       viewports: browser.viewports,
       captureCount: browser.captures.length,
       findingCount: browser.findings.length,
-      artifactIds: captureArtifactIds,
+      artifactIds: captureArtifactIds.filter((id): id is string => Boolean(id)),
+      workflowArtifactId,
+      workflows: browser.workflows.map((workflow) => ({
+        name: workflow.name,
+        viewport: workflow.viewportLabel,
+        stopped: workflow.stopped,
+        steps: workflow.steps.map((step) => ({
+          step: step.step,
+          route: step.route,
+          outcome: step.outcome,
+        })),
+      })),
     },
     deterministicCount: deterministic.length,
     browserFindingCount: browser.findings.length,

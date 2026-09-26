@@ -30,6 +30,24 @@ export type BrowserCapture = {
   markdownExcerpt?: string;
 };
 
+export type WorkflowStep = {
+  step: number;
+  route: string;
+  viewportLabel: string;
+  captureIndex: number | null;
+  pageTitle?: string;
+  outcome: "captured" | "bot_protection" | "capture_failed";
+};
+
+/** Ordered screenshots of one viewport, as a first-use path — not a human review. */
+export type UserWorkflow = {
+  name: string;
+  viewportLabel: string;
+  note: string;
+  stopped: boolean;
+  steps: WorkflowStep[];
+};
+
 export type BrowserReviewResult = {
   status: "skipped" | "integration_not_configured" | "completed" | "failed";
   message: string;
@@ -38,6 +56,7 @@ export type BrowserReviewResult = {
   viewports: string[];
   captures: BrowserCapture[];
   findings: BrowserFinding[];
+  workflows: UserWorkflow[];
 };
 
 /** Minimal Browser Run binding surface used by this adapter. */
@@ -56,7 +75,7 @@ export type BrowserEnv = {
 export type BrowserOptions = {
   allowLoopback?: boolean;
   resolve?: ResolveHost;
-  /** Injected for unit tests — bypasses env.BROWSER.quickAction. */
+  /** Test double for env.BROWSER.quickAction. */
   runner?: BrowserQuickActionRunner;
 };
 
@@ -403,6 +422,65 @@ export function discoverFromSnapshot(input: {
   return findings;
 }
 
+const WORKFLOW_NOTE =
+  "Ordered first-use path from Browser Run snapshots. These are browser observations, not human review outcomes. A bot challenge ends the path; it is not bypassed.";
+
+/** Combine per-viewport captures into ordered user-workflow records. */
+export function buildUserWorkflows(input: {
+  routes: string[];
+  viewports: string[];
+  captures: Array<Pick<BrowserCapture, "route" | "viewportLabel" | "pageTitle">>;
+  findings: BrowserFinding[];
+}): UserWorkflow[] {
+  const blocked = new Set(
+    input.findings
+      .filter((item) => /bot protection blocked/i.test(item.title) && item.captureIndex != null)
+      .map((item) => item.captureIndex as number),
+  );
+
+  return input.viewports.map((viewportLabel) => {
+    const steps: WorkflowStep[] = [];
+    let stopped = false;
+    for (const route of input.routes) {
+      const captureIndex = input.captures.findIndex(
+        (capture) => capture.route === route && capture.viewportLabel === viewportLabel,
+      );
+      if (captureIndex < 0) {
+        steps.push({
+          step: steps.length + 1,
+          route,
+          viewportLabel,
+          captureIndex: null,
+          outcome: "capture_failed",
+        });
+        continue;
+      }
+      const capture = input.captures[captureIndex]!;
+      const outcome = blocked.has(captureIndex) ? "bot_protection" : "captured";
+      steps.push({
+        step: steps.length + 1,
+        route,
+        viewportLabel,
+        captureIndex,
+        pageTitle: capture.pageTitle,
+        outcome,
+      });
+      if (outcome === "bot_protection") {
+        stopped = true;
+        break;
+      }
+    }
+    const width = viewportLabel.startsWith("390") ? "phone" : "desktop";
+    return {
+      name: `First-use path (${width})`,
+      viewportLabel,
+      note: WORKFLOW_NOTE,
+      stopped,
+      steps,
+    };
+  });
+}
+
 async function runQuickAction(
   env: BrowserEnv,
   opts: BrowserOptions | undefined,
@@ -451,6 +529,7 @@ export async function runBrowserReview(
     viewports: AUTOMATED_VIEWPORTS.map((v) => v.label),
     captures: [] as BrowserCapture[],
     findings: [] as BrowserFinding[],
+    workflows: [] as UserWorkflow[],
   };
 
   if (env.ENABLE_BROWSER_RUN !== "true") {
@@ -506,33 +585,49 @@ export async function runBrowserReview(
 
     const captures: BrowserCapture[] = [];
     const findings: BrowserFinding[] = [];
+    const routesOpened: string[] = [];
+    let haltFurtherRoutes = false;
 
     for (const route of routes) {
+      if (haltFurtherRoutes) break;
+      routesOpened.push(route);
       const absolute = absoluteRouteUrl(baseUrl, route);
       for (const viewport of viewports) {
         const { payload, bytes } = await captureSnapshot(env, opts, absolute, viewport);
-        if (!bytes || bytes.length < 32) {
-          findings.push(
-            finding({
-              category: "Release presentation",
-              severity: "medium",
-              confidence: "medium",
-              title: `Viewport capture failed (${route} @ ${viewport.label})`,
-              body: "Browser Run did not return a usable screenshot for this human-tester viewport.",
-              acceptanceCriterion: "Release URL renders a captureable page in Chromium.",
-            }),
-          );
-          continue;
-        }
-
-        const captureIndex = captures.length;
         const pageTitle =
           payload.meta?.title ??
           payload.title ??
           (typeof payload.markdown === "string"
             ? payload.markdown.split("\n").find((line) => line.startsWith("# "))?.replace(/^#\s+/, "")
             : undefined);
+        const challenged = looksLikeBotChallenge({
+          pageTitle,
+          markdown: payload.markdown,
+          content: payload.content,
+        });
+        if (challenged) haltFurtherRoutes = true;
 
+        if (!bytes || bytes.length < 32) {
+          findings.push(
+            finding({
+              category: challenged ? "Access" : "Release presentation",
+              severity: challenged ? "high" : "medium",
+              confidence: challenged ? "high" : "medium",
+              title: challenged
+                ? `Bot protection blocked Browser Run (${route} @ ${viewport.label})`
+                : `Viewport capture failed (${route} @ ${viewport.label})`,
+              body: challenged
+                ? "Browser Run reached a challenge or WAF interstitial and did not return a product screenshot. OCLaunch does not bypass bot protection. Allowlist Browser Run on a zone you control, or collect a human review."
+                : "Browser Run did not return a usable screenshot for this human-tester viewport.",
+              acceptanceCriterion: challenged
+                ? "Release URL is reachable by Cloudflare Browser Run without a bot challenge, or evidence comes from a human review."
+                : "Release URL renders a captureable page in Chromium.",
+            }),
+          );
+          continue;
+        }
+
+        const captureIndex = captures.length;
         captures.push({
           route,
           viewportLabel: viewport.label,
@@ -559,17 +654,26 @@ export async function runBrowserReview(
       }
     }
 
+    const viewportLabels = viewports.map((v) => v.label);
+    const workflows = buildUserWorkflows({
+      routes: routesOpened,
+      viewports: viewportLabels,
+      captures,
+      findings,
+    });
+
     return {
       status: "completed",
       message:
         captures.length > 0
-          ? `Human-tester Browser Run captured ${captures.length} viewport snapshot(s) across ${routes.length} route(s). Observations are not human review outcomes.`
+          ? `Human-tester Browser Run captured ${captures.length} snapshot(s) as ${workflows.length} ordered workflow(s) across ${routesOpened.length} route(s). Observations are not human review outcomes.`
           : "Browser Run finished without usable screenshots.",
       sourceUrl: baseUrl,
-      routesVisited: routes,
-      viewports: viewports.map((v) => v.label),
+      routesVisited: routesOpened,
+      viewports: viewportLabels,
       captures,
       findings,
+      workflows,
     };
   } catch (err) {
     const detail = err instanceof Error ? err.message : "browser_run_failed";
