@@ -19,14 +19,17 @@ on:
         required: false
   # workflow_dispatch is preferred. This push path exists because the
   # integration token cannot call the Actions dispatch API. A push only
-  # deploys staging, and only when this workflow file changes.
-  # That staging deploy applies remote D1 migrations before publishing,
-  # including 0003_browser_observation.sql when it is in the tree.
+  # deploys staging (never production). Staging deploy applies remote D1
+  # migrations before publishing (including 0003_browser_observation.sql).
   push:
     branches:
       - main
     paths:
       - .github/workflows/deploy.yml
+      - workers/platform/**
+      - apps/web/**
+      - packages/shared/**
+      - migrations/**
 
 permissions:
   contents: read
@@ -189,16 +192,24 @@ jobs:
                   sys.exit(1)
               host = f"oclaunch-platform-staging.{subdomain}.workers.dev"
               origin = f"https://{host}"
-              text = text.replace(
-                  'APP_ORIGIN = "https://launch-staging.orangecloud.vn"',
-                  f'APP_ORIGIN = "{origin}"',
-                  1,
-              )
-              text = text.replace(
-                  'WEBAUTHN_RP_ID = "launch-staging.orangecloud.vn"',
-                  f'WEBAUTHN_RP_ID = "{host}"',
-                  1,
-              )
+              # Keep wrangler.toml in sync if the account workers.dev subdomain changes.
+              for old_host in (
+                  "oclaunch-platform-staging.sycu-lee.workers.dev",
+                  "launch-staging.orangecloud.vn",
+              ):
+                  text = text.replace(
+                      f'APP_ORIGIN = "https://{old_host}"',
+                      f'APP_ORIGIN = "{origin}"',
+                      1,
+                  )
+                  text = text.replace(
+                      f'WEBAUTHN_RP_ID = "{old_host}"',
+                      f'WEBAUTHN_RP_ID = "{host}"',
+                      1,
+                  )
+              if f'APP_ORIGIN = "{origin}"' not in text:
+                  print("workers/platform/wrangler.toml is missing a staging APP_ORIGIN to rewrite")
+                  sys.exit(1)
               print(f"Staging public URL: {origin}")
           path.write_text(text)
           print(f"Injected D1 database id for {env} from {source}")

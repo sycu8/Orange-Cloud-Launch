@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { devLoginPermitted, RECOVERY_CODE_BYTES } from "../src/auth/passkeys.js";
+import { allowedOrigins, isAllowedOrigin } from "../src/auth/session.js";
 import { assessOutboundUrl, hostClass } from "../src/lib/fetch-guard.js";
 import { hmacSha256Hex, timingSafeEqual } from "../src/lib/secret.js";
 import { detectUpload } from "../src/lib/uploads.js";
@@ -8,6 +9,67 @@ import { isBlockedUpstream } from "../src/integrations/domains.js";
 import { redactReportSummary } from "../src/routes/reports.js";
 import { escapeHtml, renderPassportHtml } from "../src/public-html/render.js";
 import { randomToken } from "../src/lib/ids.js";
+
+describe("auth origin allowlist", () => {
+  const staging = {
+    APP_ORIGIN: "https://oclaunch-platform-staging.sycu-lee.workers.dev",
+    APP_ENV: "staging",
+    APP_ORIGINS_EXTRA: "https://launch.orangecloud.vn",
+  };
+  const local = {
+    APP_ORIGIN: "http://localhost:8787",
+    APP_ENV: "development",
+  };
+
+  it("allows the configured APP_ORIGIN and APP_ORIGINS_EXTRA", () => {
+    expect(allowedOrigins(staging)).toEqual(
+      expect.arrayContaining([
+        staging.APP_ORIGIN,
+        "https://launch.orangecloud.vn",
+      ]),
+    );
+    expect(
+      isAllowedOrigin(staging, staging.APP_ORIGIN, `${staging.APP_ORIGIN}/api/auth/passkey/register/options`),
+    ).toBe(true);
+    expect(
+      isAllowedOrigin(
+        staging,
+        "https://launch.orangecloud.vn",
+        "https://launch.orangecloud.vn/api/auth/passkey/register/options",
+      ),
+    ).toBe(true);
+  });
+
+  it("allows Vite and wrangler localhost origins in development", () => {
+    expect(allowedOrigins(local)).toEqual(
+      expect.arrayContaining([
+        "http://localhost:8787",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8787",
+      ]),
+    );
+    expect(
+      isAllowedOrigin(local, "http://localhost:5173", "http://localhost:8787/api/auth/passkey/register/options"),
+    ).toBe(true);
+  });
+
+  it("allows the Worker request origin even when APP_ORIGIN differs", () => {
+    const preview = "https://abcd1234-oclaunch-platform-staging.sycu-lee.workers.dev";
+    expect(
+      isAllowedOrigin(staging, preview, `${preview}/api/auth/passkey/register/options`),
+    ).toBe(true);
+  });
+
+  it("rejects unrelated origins", () => {
+    expect(
+      isAllowedOrigin(staging, "https://evil.example", `${staging.APP_ORIGIN}/api/x`),
+    ).toBe(false);
+    expect(
+      isAllowedOrigin(local, "https://evil.example", "http://localhost:8787/api/x"),
+    ).toBe(false);
+  });
+});
 
 describe("outbound URL guard", () => {
   it("blocks private, loopback, and metadata hosts", () => {
