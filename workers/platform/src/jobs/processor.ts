@@ -204,42 +204,112 @@ async function handleReport(
     .bind(projectId, release.captured_at)
     .first<{ id: string; label: string }>();
 
+  const project = await env.DB.prepare(`SELECT live_url FROM projects WHERE id = ?`)
+    .bind(projectId)
+    .first<{ live_url: string | null }>();
+
+  let priorFindings: Array<Record<string, unknown>> = [];
+  if (previous) {
+    const prior = await env.DB.prepare(
+      `SELECT title, state FROM findings WHERE project_id = ? AND release_id = ?`,
+    )
+      .bind(projectId, previous.id)
+      .all();
+    priorFindings = (prior.results ?? []) as Array<Record<string, unknown>>;
+  }
+
   const byState: Record<string, number> = {};
+  const byProvenance: Record<string, number> = {};
   for (const f of findings.results ?? []) {
-    const s = String((f as { state: string }).state);
-    byState[s] = (byState[s] ?? 0) + 1;
+    const row = f as { state: string; provenance: string };
+    byState[row.state] = (byState[row.state] ?? 0) + 1;
+    byProvenance[row.provenance] = (byProvenance[row.provenance] ?? 0) + 1;
+  }
+
+  const currentTitles = new Set(
+    (findings.results ?? []).map((f) => String((f as { title: string }).title)),
+  );
+  const reopened = (findings.results ?? []).filter(
+    (f) => (f as { state: string }).state === "reopened",
+  );
+  const verifiedNotRechecked = priorFindings.filter((f) => {
+    const title = String(f.title);
+    const state = String(f.state);
+    return state === "verified" && !currentTitles.has(title);
+  });
+
+  const outcomeCounts: Record<string, number> = {};
+  for (const r of reviews.results ?? []) {
+    const o = String((r as { outcome: string }).outcome);
+    outcomeCounts[o] = (outcomeCounts[o] ?? 0) + 1;
   }
 
   const nextActions = recommendNextActions(findings.results as Array<Record<string, unknown>>);
+  const reviewedUrl = String(release.reviewed_url || release.source_url || "");
+  const liveUrl = project?.live_url ?? null;
+  const environment = String(release.environment || "preview");
+  const envGap =
+    liveUrl && reviewedUrl && liveUrl.replace(/\/$/, "") !== reviewedUrl.replace(/\/$/, "")
+      ? {
+          reviewedUrl,
+          liveUrl,
+          message:
+            environment === "production"
+              ? "Reviewed URL differs from the project live URL — do not treat this as verified on production live."
+              : `Human tried ${environment} at a URL that is not the project live URL.`,
+        }
+      : null;
+
+  const humanFindings = (findings.results ?? []).filter(
+    (f) => (f as { provenance: string }).provenance === "human_observation",
+  );
+  const otherFindings = (findings.results ?? []).filter(
+    (f) => (f as { provenance: string }).provenance !== "human_observation",
+  );
 
   const summary = {
-    report_version: 1,
+    report_version: 2,
     ruleset_version: env.RULESET_VERSION || RULESET_VERSION,
     brand_version_id: brand?.id ?? null,
     release_id: releaseId,
     commit_sha: release.commit_sha ?? null,
     captured_at: release.captured_at,
     source_url: release.source_url,
+    reviewed_url: reviewedUrl,
+    live_url: liveUrl,
+    environment,
+    environment_gap: envGap,
     label: release.label,
     viewports: ["1280x800", "390x844"],
     tested_tasks: reviews.results?.length ?? 0,
     human_reviews: {
       sample_size: reviews.results?.length ?? 0,
+      outcome_counts: outcomeCounts,
       outcomes: (reviews.results ?? []).map((r) => ({
         outcome: (r as { outcome: string }).outcome,
         audience_fit: (r as { audience_fit: string }).audience_fit,
       })),
+      note: "could_not_complete is a successful critical review — praise is not required.",
     },
-    findings: findings.results ?? [],
+    reopened_findings: reopened,
+    verified_not_rechecked: verifiedNotRechecked.map((f) => ({
+      title: f.title,
+      prior_state: f.state,
+    })),
+    findings: [...humanFindings, ...otherFindings],
     counts_by_state: byState,
+    counts_by_provenance: byProvenance,
     previous_release: previous ?? null,
     untested_scope: [
       "Cross-browser rendering beyond Chromium deterministic fetch",
       "Authenticated multi-step journeys",
       "Performance budgets",
+      ...(environment !== "production"
+        ? ["Production live URL was not the human review target for this report"]
+        : []),
     ],
     next_three_actions: nextActions,
-    note: "No universal readiness score. Coverage and concrete outcomes only.",
+    note: "No universal readiness score. Human task results first; deterministic fetch notes are not human outcomes.",
   };
 
   const versionRow = await env.DB.prepare(

@@ -1,8 +1,12 @@
 import { Hono } from "hono";
-import { createReleaseSchema, RULESET_VERSION } from "@oclaunch/shared";
+import {
+  createReleaseSchema,
+  DANGEROUS_PATH_MISSIONS,
+  RULESET_VERSION,
+} from "@oclaunch/shared";
 import type { AppEnv } from "../lib/http.js";
 import { jsonErr, jsonOk, nowIso } from "../lib/http.js";
-import { newId } from "../lib/ids.js";
+import { newId, randomToken, sha256Hex } from "../lib/ids.js";
 import { audit, requireMember } from "../db/access.js";
 import { enqueueJob } from "../jobs/outbox.js";
 
@@ -18,10 +22,12 @@ releaseRoutes.post("/projects/:projectId/releases", async (c) => {
   }
   const id = newId("rel");
   const capturedAt = nowIso();
+  const reviewedUrl = parsed.data.reviewedUrl || parsed.data.sourceUrl;
   await c.env.DB.prepare(
     `INSERT INTO releases (
-      id, project_id, label, source_url, commit_sha, deployment_id, ruleset_version, captured_at, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, project_id, label, source_url, commit_sha, deployment_id, ruleset_version,
+      captured_at, created_by, environment, reviewed_url
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -33,10 +39,49 @@ releaseRoutes.post("/projects/:projectId/releases", async (c) => {
       c.env.RULESET_VERSION || RULESET_VERSION,
       capturedAt,
       c.get("userId") ?? null,
+      parsed.data.environment,
+      reviewedUrl,
     )
     .run();
+  // Default five dangerous-path missions — could_not_complete is a successful review.
+  const missionStmts = [];
+  for (const pack of DANGEROUS_PATH_MISSIONS) {
+    const missionId = newId("msn");
+    const invite = randomToken(16);
+    const inviteHash = await sha256Hex(invite);
+    missionStmts.push(
+      c.env.DB.prepare(
+        `INSERT INTO missions (
+          id, project_id, release_id, title, instructions, topic_tags, language, state,
+          invite_token_hash, created_by, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'en', 'open', ?, ?, ?)`,
+      ).bind(
+        missionId,
+        projectId,
+        id,
+        pack.title,
+        pack.instructions,
+        JSON.stringify([...pack.topicTags]),
+        inviteHash,
+        c.get("userId") ?? null,
+        capturedAt,
+      ),
+    );
+  }
+  if (missionStmts.length) await c.env.DB.batch(missionStmts);
+
   await audit(c, "release.create", "release", id, projectId);
-  return jsonOk(c, { id, capturedAt, ...parsed.data }, 201);
+  return jsonOk(
+    c,
+    {
+      id,
+      capturedAt,
+      reviewedUrl,
+      defaultMissions: DANGEROUS_PATH_MISSIONS.length,
+      ...parsed.data,
+    },
+    201,
+  );
 });
 
 releaseRoutes.get("/projects/:projectId/releases/:releaseId", async (c) => {

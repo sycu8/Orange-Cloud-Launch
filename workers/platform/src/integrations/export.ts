@@ -52,6 +52,7 @@ export async function buildAgentExport(
       "Inspect the existing repository before editing. Do not invent filenames from a URL-only scan.",
       "Preserve working behavior outside the accepted findings.",
       "Do not change auth, permissions, billing, schema, workflow files, or backend behavior unless a finding explicitly requires it and the owner approved that scope.",
+      "Do not delete, skip, or rewrite tests so they pass. If a test fails, leave it failing and list it under untested scope with the reason.",
       "Return before/after notes and list untested scope.",
     ],
     project: {

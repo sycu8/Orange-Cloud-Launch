@@ -14,7 +14,9 @@ import { reportRoutes, publicRoutes } from "./routes/reports.js";
 import { domainRoutes } from "./routes/domains.js";
 import { integrationRoutes } from "./routes/integrations.js";
 import { artifactRoutes } from "./routes/artifacts.js";
+import { workspaceRoutes } from "./routes/workspace.js";
 import { relayOutbox } from "./jobs/outbox.js";
+import { runCleanup } from "./jobs/cleanup.js";
 
 const app = new Hono<AppEnv>();
 
@@ -58,6 +60,7 @@ app.use("/api/*", async (c, next) => {
     const csrfExempt =
       path.startsWith("/api/auth/passkey/") ||
       path === "/api/auth/dev-login" ||
+      path === "/api/auth/recovery/redeem" ||
       path === "/api/integrations/github/webhook";
     if (!csrfExempt && c.req.method !== "GET" && c.req.method !== "HEAD") {
       return jsonErr(c, "CSRF", "Missing or invalid CSRF token", 403, {
@@ -78,6 +81,7 @@ app.get("/api/health", (c) =>
 );
 
 app.route("/api/auth", authRoutes);
+app.route("/api", workspaceRoutes);
 app.route("/api", projectRoutes);
 app.route("/api", releaseRoutes);
 app.route("/api", missionRoutes);
@@ -89,6 +93,14 @@ app.route("/api", domainRoutes);
 app.route("/api", artifactRoutes);
 app.route("/api/integrations", integrationRoutes);
 app.route("/api", publicRoutes);
+
+app.post("/api/internal/cleanup", async (c) => {
+  if (c.env.APP_ENV === "production") {
+    return jsonErr(c, "FORBIDDEN", "Use scheduled cron in production", 403);
+  }
+  const result = await runCleanup(c.env);
+  return c.json(result);
+});
 
 // Worker-rendered public pages (also under run_worker_first)
 app.route("/", publicRoutes);
@@ -118,5 +130,6 @@ export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext) {
     await relayOutbox(env);
+    await runCleanup(env);
   },
 };

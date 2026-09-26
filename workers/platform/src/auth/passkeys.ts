@@ -80,13 +80,13 @@ export async function registrationOptions(
       userVerification: "required",
     },
   });
-  const challengeId = await storeChallenge(c, "registration", options.challenge, userId);
-  // Persist pending user so verify can attach credential
+  // Insert user before challenge — auth_challenges.user_id FKs to users(id).
   await c.env.DB.prepare(
     `INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)`,
   )
     .bind(userId, displayName, nowIso())
     .run();
+  const challengeId = await storeChallenge(c, "registration", options.challenge, userId);
   return { options, challengeId, userId };
 }
 

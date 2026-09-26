@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { EmptyState, PageHeader, StatusPill } from "../components/ui";
+import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n";
+import { Button, EmptyState, PageHeader, StatusPill } from "../components/ui";
 
 type DiscoverProject = {
   slug: string;
@@ -15,6 +17,8 @@ type DiscoverProject = {
 };
 
 export function DiscoverPage() {
+  const { me } = useAuth();
+  const { t } = useI18n();
   const [projects, setProjects] = useState<DiscoverProject[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,19 +31,39 @@ export function DiscoverPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <PageHeader
-        title="Discover review requests"
-        subtitle="Opt-in public projects only. Visibility defaults to private."
+        title={t("discover.title")}
+        subtitle={t("discover.subtitle")}
+        actions={
+          <Link to={me ? "/app/inbox" : "/signin?next=/app/inbox"} className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto">
+              {me ? t("discover.openInbox") : t("discover.signInReview")}
+            </Button>
+          </Link>
+        }
       />
       {error ? <p className="text-[#9B1C1C]">{error}</p> : null}
       {!error && projects.length === 0 ? (
         <EmptyState
-          title="No public projects yet"
-          body="When founders opt into the directory, focused review missions appear here."
+          title={t("discover.emptyTitle")}
+          body={t("discover.emptyBody")}
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link to={me ? "/app/inbox" : "/signin?next=/app/inbox"}>
+                <Button>{me ? t("discover.openInbox") : t("discover.signInReview")}</Button>
+              </Link>
+              <Link to={me ? "/app/new" : "/signin?next=/app/new"}>
+                <Button variant="secondary">{t("home.cta.add")}</Button>
+              </Link>
+            </div>
+          }
         />
       ) : (
         <ul className="divide-y divide-border border-y border-border">
           {projects.map((p) => (
-            <li key={p.slug} className="flex flex-col gap-2 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <li
+              key={p.slug}
+              className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between"
+            >
               <div>
                 <Link to={`/p/${p.slug}`} className="text-lg font-semibold text-ink no-underline">
                   {p.name}
@@ -49,11 +73,22 @@ export function DiscoverPage() {
                   {p.category} · audience: {p.audience}
                 </p>
               </div>
-              <StatusPill tone={p.open_missions > 0 ? "action" : "neutral"}>
-                {p.open_missions > 0
-                  ? `${p.open_missions} open mission${p.open_missions === 1 ? "" : "s"}`
-                  : "No open missions"}
-              </StatusPill>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone={p.open_missions > 0 ? "action" : "neutral"}>
+                  {p.open_missions > 0
+                    ? `${p.open_missions} ${
+                        p.open_missions === 1
+                          ? t("discover.openMissions")
+                          : t("discover.openMissionsPlural")
+                      }`
+                    : t("discover.noMissions")}
+                </StatusPill>
+                {p.open_missions > 0 ? (
+                  <Link to={me ? "/app/inbox" : "/signin?next=/app/inbox"}>
+                    <Button variant="secondary">{t("discover.review")}</Button>
+                  </Link>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

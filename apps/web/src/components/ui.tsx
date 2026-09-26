@@ -8,13 +8,13 @@ export function Button({
   variant?: "primary" | "secondary" | "ghost";
 }) {
   const base =
-    "inline-flex min-h-[44px] items-center justify-center rounded-[10px] px-4 text-[15px] font-semibold transition-opacity duration-160 disabled:opacity-50";
+    "oc-btn inline-flex min-h-[44px] items-center justify-center rounded-[10px] px-4 text-[15px] font-semibold transition-opacity duration-160 disabled:opacity-50";
   const styles = {
-    primary: "bg-action text-white hover:opacity-95",
+    primary: "bg-action text-canvas hover:opacity-95",
     secondary: "bg-orange-tint text-ink border border-border hover:opacity-95",
     ghost: "bg-transparent text-ink hover:bg-orange-tint",
   }[variant];
-  return <button className={`${base} ${styles} ${className}`} {...props} />;
+  return <button type={props.type ?? "button"} className={`${base} ${styles} ${className}`} {...props} />;
 }
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
@@ -97,11 +97,11 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-ink">{title}</h1>
-        {subtitle ? <p className="mt-1 text-muted">{subtitle}</p> : null}
+      <div className="min-w-0">
+        <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">{title}</h1>
+        {subtitle ? <p className="mt-1 text-sm text-muted sm:text-base">{subtitle}</p> : null}
       </div>
-      {actions}
+      {actions ? <div className="w-full shrink-0 sm:w-auto">{actions}</div> : null}
     </div>
   );
 }

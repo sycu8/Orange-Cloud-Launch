@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useOutletContext, useParams } from "react-router-dom";
+import { Link, useOutletContext, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { Button, EmptyState, Input, Label, Notice, TextArea } from "../../components/ui";
 import type { ProjectDetail } from "./ProjectLayout";
@@ -24,6 +24,7 @@ export function MissionsPage() {
   const [invite, setInvite] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const releaseId = data.releases[0]?.id;
+  const latest = data.releases[0];
 
   async function load() {
     const res = await api<{ missions: Mission[] }>(`/api/projects/${id}/missions`);
@@ -61,14 +62,36 @@ export function MissionsPage() {
     }
   }
 
+  async function rotateInvite(missionId: string) {
+    setError(null);
+    try {
+      const res = await api<{ inviteToken: string }>(
+        `/api/projects/${id}/missions/${missionId}/rotate-invite`,
+        { method: "POST", body: "{}" },
+      );
+      setInvite(`${window.location.origin}/review/${res.inviteToken}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    }
+  }
+
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <div>
         <h2 className="text-xl font-semibold">Review Missions</h2>
         <p className="mt-1 text-sm text-muted">
-          Scoped invite links do not expose repositories or private settings. Invitations are not
-          sent automatically.
+          Each new release starts with five dangerous-path missions (private window, logged-out
+          protected page, another account’s data, phone width, empty/failed save).{" "}
+          <em>Could not complete</em> is a successful critical review. Self-review is blocked —
+          solo founders can log a note on the release instead.
         </p>
+        {latest ? (
+          <div className="mt-3">
+            <Link to={`/app/projects/${id}/releases/${latest.id}`}>
+              <Button variant="secondary">Log a founder note on {latest.label}</Button>
+            </Link>
+          </div>
+        ) : null}
         {missions.length === 0 ? (
           <div className="mt-4">
             <EmptyState
@@ -83,8 +106,20 @@ export function MissionsPage() {
                 <p className="font-semibold">{m.title}</p>
                 <p className="text-sm text-muted">{m.instructions}</p>
                 <p className="mt-2 text-xs text-muted">
-                  {m.state} · release {m.release_id}
+                  {m.state}
+                  {data.releases.find((r) => r.id === m.release_id)
+                    ? ` · ${data.releases.find((r) => r.id === m.release_id)!.label}`
+                    : ""}
                 </p>
+                {m.state === "open" ? (
+                  <Button
+                    className="mt-3"
+                    variant="secondary"
+                    onClick={() => void rotateInvite(m.id)}
+                  >
+                    Copy new invite link
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -110,6 +145,7 @@ export function MissionsPage() {
         {invite ? (
           <Notice title="Share this invite link" tone="action">
             <code className="break-all text-xs">{invite}</code>
+            <p className="mt-2">Rotating a link invalidates the previous one.</p>
           </Notice>
         ) : null}
         {error ? (

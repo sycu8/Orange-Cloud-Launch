@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 import { Button, EmptyState, Input, Label, Notice } from "../../components/ui";
 
 type ChangeSet = {
@@ -8,18 +9,18 @@ type ChangeSet = {
   base_sha: string;
   state: string;
   export_artifact_id: string | null;
-  preview_url: string | null;
-  pr_url: string | null;
 };
 
 type Finding = { id: string; title: string; state: string; release_id: string };
 
 export function ChangesPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { t } = useI18n();
   const [changeSets, setChangeSets] = useState<ChangeSet[]>([]);
   const [accepted, setAccepted] = useState<Finding[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [baseSha, setBaseSha] = useState("main-unknown");
+  const [baseSha, setBaseSha] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,9 +33,13 @@ export function ChangesPage() {
       const detail = await api<{ findings: Finding[] }>(
         `/api/projects/${id}/releases/${rel.id}`,
       );
-      findings.push(...detail.findings.filter((f) => f.state === "accepted"));
+      findings.push(
+        ...detail.findings.filter(
+          (f) => f.state === "accepted" || f.state === "change_proposed",
+        ),
+      );
     }
-    setAccepted(findings);
+    setAccepted(findings.filter((f) => f.state === "accepted"));
   }
 
   useEffect(() => {
@@ -42,14 +47,19 @@ export function ChangesPage() {
   }, [id]);
 
   async function createChangeSet() {
+    if (baseSha.trim().length < 7) {
+      setError(t("changes.baseShaError"));
+      return;
+    }
     try {
       const res = await api<{ id: string }>(`/api/projects/${id}/changes`, {
         method: "POST",
-        body: JSON.stringify({ findingIds: selected, baseSha }),
+        body: JSON.stringify({ findingIds: selected, baseSha: baseSha.trim() }),
       });
       setMessage(`Change set ${res.id} proposed`);
       setSelected([]);
       await load();
+      navigate(`/app/projects/${id}/changes/${res.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     }
@@ -57,38 +67,11 @@ export function ChangesPage() {
 
   async function exportBundle(changeId: string) {
     try {
-      const res = await api<{ job: { result_json?: string } }>(
-        `/api/projects/${id}/changes/${changeId}/export`,
-        { method: "POST", body: "{}" },
-      );
-      const parsed = res.job.result_json
-        ? (JSON.parse(res.job.result_json) as { artifactId?: string })
-        : null;
-      setMessage(
-        parsed?.artifactId
-          ? "Agent export ready — download the task bundle."
-          : "Export job finished",
-      );
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
-    }
-  }
-
-  async function requestBuild(changeId: string) {
-    try {
-      const res = await api<{ job: { result_json?: string } }>(
-        `/api/projects/${id}/changes/${changeId}/build`,
-        { method: "POST", body: "{}" },
-      );
-      const parsed = res.job.result_json
-        ? (JSON.parse(res.job.result_json) as { status?: string; message?: string })
-        : null;
-      if (parsed?.status === "integration_not_configured") {
-        setError(parsed.message ?? "Integration not configured");
-      } else {
-        setMessage("Build requested");
-      }
+      await api(`/api/projects/${id}/changes/${changeId}/export`, {
+        method: "POST",
+        body: "{}",
+      });
+      setMessage(t("changes.exportReady"));
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
@@ -98,20 +81,22 @@ export function ChangesPage() {
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <div>
-        <h2 className="text-xl font-semibold">Improvement studio</h2>
-        <p className="mt-1 text-sm text-muted">
-          Path 1: export a coherent task bundle for your coding agent. Path 2: sandbox preview +
-          draft PR for supported React/Vite + Tailwind repos (requires credentials).
-        </p>
+        <h2 className="text-xl font-semibold">{t("changes.title")}</h2>
+        <p className="mt-1 text-sm text-muted">{t("changes.subtitle")}</p>
         <div className="mt-4 space-y-2">
-          <Label>Base commit SHA</Label>
-          <Input value={baseSha} onChange={(e) => setBaseSha(e.target.value)} />
+          <Label>{t("changes.baseSha")}</Label>
+          <Input
+            value={baseSha}
+            onChange={(e) => setBaseSha(e.target.value)}
+            placeholder={t("changes.baseShaPh")}
+            required
+          />
         </div>
-        <h3 className="mt-4 font-semibold">Accepted findings</h3>
+        <h3 className="mt-4 font-semibold">{t("changes.accepted")}</h3>
         {accepted.length === 0 ? (
           <EmptyState
-            title="No accepted findings"
-            body="Triage and accept findings on a release before proposing a change set."
+            title={t("changes.acceptedEmptyTitle")}
+            body={t("changes.acceptedEmptyBody")}
           />
         ) : (
           <ul className="mt-2 space-y-2">
@@ -134,14 +119,18 @@ export function ChangesPage() {
             ))}
           </ul>
         )}
-        <Button className="mt-4" disabled={!selected.length} onClick={() => void createChangeSet()}>
-          Propose change set
+        <Button
+          className="mt-4"
+          disabled={!selected.length || baseSha.trim().length < 7}
+          onClick={() => void createChangeSet()}
+        >
+          {t("changes.propose")}
         </Button>
       </div>
       <div>
-        <h3 className="font-semibold">Change sets</h3>
+        <h3 className="font-semibold">{t("changes.sets")}</h3>
         {changeSets.length === 0 ? (
-          <EmptyState title="None yet" body="Proposed improvements will appear here." />
+          <EmptyState title={t("changes.setsEmptyTitle")} body={t("changes.setsEmptyBody")} />
         ) : (
           <ul className="mt-3 space-y-3">
             {changeSets.map((cs) => (
@@ -151,15 +140,12 @@ export function ChangesPage() {
                   {cs.state} · base {cs.base_sha}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button variant="secondary" onClick={() => void exportBundle(cs.id)}>
-                    Export for coding agent
+                  <Link to={`/app/projects/${id}/changes/${cs.id}`}>
+                    <Button>{t("changes.openStudio")}</Button>
+                  </Link>
+                  <Button variant="ghost" onClick={() => void exportBundle(cs.id)}>
+                    {t("changes.quickExport")}
                   </Button>
-                  {cs.export_artifact_id ? (
-                    <a href={`/api/projects/${id}/changes/${cs.id}/export-download`}>
-                      <Button variant="ghost">Download bundle</Button>
-                    </a>
-                  ) : null}
-                  <Button onClick={() => void requestBuild(cs.id)}>Preview / draft PR</Button>
                 </div>
               </li>
             ))}
@@ -167,14 +153,14 @@ export function ChangesPage() {
         )}
         {message ? (
           <div className="mt-4">
-            <Notice title="Update" tone="positive">
+            <Notice title={t("common.update")} tone="positive">
               {message}
             </Notice>
           </div>
         ) : null}
         {error ? (
           <div className="mt-4">
-            <Notice title="Integration or validation" tone="danger">
+            <Notice title={t("common.error")} tone="danger">
               {error}
             </Notice>
           </div>

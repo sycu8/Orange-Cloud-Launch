@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { FINDING_CATEGORIES, FINDING_STATES, RESERVED_SLUGS } from "./constants.js";
+import {
+  FINDING_CATEGORIES,
+  FINDING_STATES,
+  RELEASE_ENVIRONMENTS,
+  RESERVED_SLUGS,
+} from "./constants.js";
 
 export const slugSchema = z
   .string()
@@ -29,6 +34,8 @@ export const createReleaseSchema = z.object({
   sourceUrl: z.string().url(),
   commitSha: z.string().max(64).optional(),
   deploymentId: z.string().max(128).optional(),
+  environment: z.enum(RELEASE_ENVIRONMENTS).default("preview"),
+  reviewedUrl: z.string().url().optional().or(z.literal("")),
 });
 
 export const createMissionSchema = z.object({
@@ -65,6 +72,15 @@ export const triageFindingSchema = z.object({
   state: z.enum(FINDING_STATES),
   expectedVersion: z.number().int().positive(),
   dismissRationale: z.string().max(1000).optional(),
+  acceptanceCriterion: z.string().max(1000).optional(),
+});
+
+/** Owner-logged observation so a solo founder can finish the loop without a second reviewer. */
+export const createOwnerFindingSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(4000),
+  category: z.enum(FINDING_CATEGORIES).default("First-use experience"),
+  severity: z.enum(["blocker", "high", "medium", "low"]).default("medium"),
   acceptanceCriterion: z.string().max(1000).optional(),
 });
 
@@ -117,5 +133,6 @@ export type CreateReleaseInput = z.infer<typeof createReleaseSchema>;
 export type CreateMissionInput = z.infer<typeof createMissionSchema>;
 export type SubmitReviewInput = z.infer<typeof submitReviewSchema>;
 export type TriageFindingInput = z.infer<typeof triageFindingSchema>;
+export type CreateOwnerFindingInput = z.infer<typeof createOwnerFindingSchema>;
 export type CreateBrandInput = z.infer<typeof createBrandSchema>;
 export type CreateChangeSetInput = z.infer<typeof createChangeSetSchema>;

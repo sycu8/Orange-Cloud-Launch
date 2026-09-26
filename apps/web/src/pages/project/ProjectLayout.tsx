@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
+import { useI18n } from "../../lib/i18n";
 import { StatusPill } from "../../components/ui";
 
 export type ProjectDetail = {
@@ -22,11 +23,24 @@ export type ProjectDetail = {
     source_url: string;
     commit_sha: string | null;
     captured_at: string;
+    environment?: string;
+    reviewed_url?: string | null;
   }>;
+  loop?: {
+    open_missions: number;
+    open_findings: number;
+    accepted_findings: number;
+    in_progress_findings: number;
+    verified_findings: number;
+    change_sets: number;
+    implemented_changes: number;
+    reports: number;
+  };
 };
 
 export function ProjectLayout() {
   const { me, loading } = useAuth();
+  const { t } = useI18n();
   const { id } = useParams();
   const [data, setData] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,16 +52,18 @@ export function ProjectLayout() {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed"));
   }, [me, id]);
 
-  if (loading) return <p className="text-muted">Loading…</p>;
-  if (!me) return <Navigate to="/signin" replace />;
+  if (loading) return <p className="text-muted">{t("common.loading")}</p>;
+  if (!me) return <Navigate to={`/signin?next=/app/projects/${id}/overview`} replace />;
   if (error) return <p className="text-[#9B1C1C]">{error}</p>;
-  if (!data) return <p className="text-muted">Loading project…</p>;
+  if (!data) return <p className="text-muted">{t("common.loading")}</p>;
 
   const base = `/app/projects/${id}`;
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `rounded-[10px] px-3 py-2 text-sm font-semibold no-underline ${
       isActive ? "bg-orange-tint text-action" : "text-muted hover:text-ink"
     }`;
+  const publicPassport =
+    data.project.visibility === "public" || data.project.visibility === "unlisted";
 
   return (
     <div>
@@ -55,7 +71,7 @@ export function ProjectLayout() {
         <div>
           <p className="text-sm text-muted">
             <Link to="/app" className="text-muted">
-              My projects
+              {t("nav.myProjects")}
             </Link>{" "}
             / {data.project.name}
           </p>
@@ -67,29 +83,38 @@ export function ProjectLayout() {
           <StatusPill tone={data.project.visibility === "public" ? "positive" : "neutral"}>
             {data.project.visibility}
           </StatusPill>
-          <Link to={`/p/${data.project.slug}`} className="text-sm font-semibold">
-            Passport
-          </Link>
+          {publicPassport ? (
+            <Link to={`/p/${data.project.slug}`} className="text-sm font-semibold">
+              Passport
+            </Link>
+          ) : (
+            <span className="max-w-[14rem] text-xs text-muted">{t("passport.private")}</span>
+          )}
         </div>
       </div>
       <nav className="mb-6 flex flex-wrap gap-1 border-b border-border pb-3">
         <NavLink to={`${base}/overview`} className={linkClass}>
-          Overview
+          {t("nav.overview")}
         </NavLink>
         <NavLink to={`${base}/missions`} className={linkClass}>
-          Reviews
-        </NavLink>
-        <NavLink to={`${base}/brand`} className={linkClass}>
-          Brand
+          {t("nav.reviews")}
         </NavLink>
         <NavLink to={`${base}/changes`} className={linkClass}>
-          Improvements
+          {t("nav.improvements")}
         </NavLink>
         <NavLink to={`${base}/reports`} className={linkClass}>
-          Reports
+          {t("nav.reports")}
+        </NavLink>
+        <NavLink to={`${base}/settings`} className={linkClass}>
+          {t("nav.settings")}
         </NavLink>
       </nav>
-      <Outlet context={{ data, reload: () => api<ProjectDetail>(`/api/projects/${id}`).then(setData) }} />
+      <Outlet
+        context={{
+          data,
+          reload: () => api<ProjectDetail>(`/api/projects/${id}`).then(setData),
+        }}
+      />
     </div>
   );
 }

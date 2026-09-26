@@ -8,7 +8,9 @@ import {
   verifyRegistration,
   devLogin,
 } from "../auth/passkeys.js";
-import { revokeSession } from "../auth/session.js";
+import { createSession, revokeSession } from "../auth/session.js";
+import { nowIso } from "../lib/http.js";
+import { sha256Hex } from "../lib/ids.js";
 
 export const authRoutes = new Hono<AppEnv>();
 
@@ -96,4 +98,32 @@ authRoutes.post("/dev-login", async (c) => {
 authRoutes.post("/logout", async (c) => {
   await revokeSession(c);
   return jsonOk(c, { ok: true });
+});
+
+/** Single-use recovery code login (hashed at rest). */
+authRoutes.post("/recovery/redeem", async (c) => {
+  const body = await c.req.json<{ code?: string }>().catch(() => ({}));
+  const code = (body as { code?: string }).code?.trim();
+  if (!code) return jsonErr(c, "VALIDATION", "code is required", 400);
+  const hash = await sha256Hex(code);
+  const row = await c.env.DB.prepare(
+    `SELECT id, user_id FROM recovery_codes WHERE code_hash = ? AND used_at IS NULL`,
+  )
+    .bind(hash)
+    .first<{ id: string; user_id: string }>();
+  if (!row) {
+    return jsonErr(c, "AUTH_FAILED", "Invalid or already used recovery code", 401, {
+      nextAction: "Use a remaining unused recovery code or register a new passkey while signed in",
+    });
+  }
+  const consumed = await c.env.DB.prepare(
+    `UPDATE recovery_codes SET used_at = ? WHERE id = ? AND used_at IS NULL`,
+  )
+    .bind(nowIso(), row.id)
+    .run();
+  if (!consumed.meta.changes) {
+    return jsonErr(c, "AUTH_FAILED", "Invalid or already used recovery code", 401);
+  }
+  const session = await createSession(c, row.user_id);
+  return jsonOk(c, { userId: row.user_id, csrfToken: session.csrfToken });
 });

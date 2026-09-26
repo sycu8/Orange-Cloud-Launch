@@ -7,13 +7,91 @@ import { renderReportHtml, renderPassportHtml } from "../public-html/render.js";
 
 export const reportRoutes = new Hono<AppEnv>();
 
+reportRoutes.get("/projects/:projectId/releases/:releaseId/compare/:otherReleaseId", async (c) => {
+  const projectId = c.req.param("projectId");
+  const releaseId = c.req.param("releaseId");
+  const otherReleaseId = c.req.param("otherReleaseId");
+  const role = await requireMember(c, projectId);
+  if (!role) return jsonErr(c, "FORBIDDEN", "No access", 403);
+
+  const [a, b] = await Promise.all([
+    c.env.DB.prepare(`SELECT * FROM releases WHERE project_id = ? AND id = ?`)
+      .bind(projectId, releaseId)
+      .first<Record<string, unknown>>(),
+    c.env.DB.prepare(`SELECT * FROM releases WHERE project_id = ? AND id = ?`)
+      .bind(projectId, otherReleaseId)
+      .first<Record<string, unknown>>(),
+  ]);
+  if (!a || !b) return jsonErr(c, "NOT_FOUND", "Release not found", 404);
+
+  const findingsA = await c.env.DB.prepare(
+    `SELECT id, title, state, provenance, severity, category FROM findings
+     WHERE project_id = ? AND release_id = ?`,
+  )
+    .bind(projectId, releaseId)
+    .all();
+  const findingsB = await c.env.DB.prepare(
+    `SELECT id, title, state, provenance, severity, category FROM findings
+     WHERE project_id = ? AND release_id = ?`,
+  )
+    .bind(projectId, otherReleaseId)
+    .all();
+
+  const countByState = (rows: unknown[]) => {
+    const out: Record<string, number> = {};
+    for (const row of rows) {
+      const s = String((row as { state: string }).state);
+      out[s] = (out[s] ?? 0) + 1;
+    }
+    return out;
+  };
+
+  const titlesA = new Set(
+    (findingsA.results ?? []).map((f) => String((f as { title: string }).title)),
+  );
+  const titlesB = new Set(
+    (findingsB.results ?? []).map((f) => String((f as { title: string }).title)),
+  );
+  const newInA = [...titlesA].filter((t) => !titlesB.has(t));
+  const resolvedSinceB = (findingsB.results ?? [])
+    .filter((f) => {
+      const row = f as { title: string; state: string };
+      const match = (findingsA.results ?? []).find(
+        (x) => (x as { title: string }).title === row.title,
+      ) as { state: string } | undefined;
+      return (
+        ["observed", "triaged", "accepted", "needs_evidence"].includes(row.state) &&
+        match &&
+        ["verified", "implemented", "dismissed"].includes(match.state)
+      );
+    })
+    .map((f) => (f as { title: string }).title);
+
+  return jsonOk(c, {
+    base: { id: otherReleaseId, label: b.label, captured_at: b.captured_at },
+    target: { id: releaseId, label: a.label, captured_at: a.captured_at },
+    counts: {
+      target: countByState(findingsA.results ?? []),
+      base: countByState(findingsB.results ?? []),
+    },
+    newFindingTitles: newInA,
+    improvedTitles: resolvedSinceB,
+    note: "Comparison is evidence-based title/state matching — not a readiness score.",
+  });
+});
+
 reportRoutes.get("/projects/:projectId/reports", async (c) => {
   const projectId = c.req.param("projectId");
   const role = await requireMember(c, projectId);
   if (!role) return jsonErr(c, "FORBIDDEN", "No access", 403);
   const rows = await c.env.DB.prepare(
-    `SELECT id, release_id, version, ruleset_version, created_at FROM reports
-     WHERE project_id = ? ORDER BY created_at DESC`,
+    `SELECT r.id, r.release_id, r.version, r.ruleset_version, r.created_at,
+            rel.label as release_label,
+            json_extract(r.summary_json, '$.environment') as environment,
+            json_extract(r.summary_json, '$.human_reviews.sample_size') as human_sample_size
+     FROM reports r
+     JOIN releases rel ON rel.project_id = r.project_id AND rel.id = r.release_id
+     WHERE r.project_id = ? ORDER BY r.created_at DESC`,
   )
     .bind(projectId)
     .all();

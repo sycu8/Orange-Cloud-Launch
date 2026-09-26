@@ -1,90 +1,85 @@
 import { Link } from "react-router-dom";
-import { PRODUCT } from "@oclaunch/shared";
+import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n";
 import { Button } from "../components/ui";
 import iconUrl from "../assets/oclaunch-icon.svg";
 
 export function HomePage() {
+  const { me } = useAuth();
+  const { t } = useI18n();
+  const reviewHref = me ? "/app/inbox" : "/signin?next=/app/inbox";
+
   return (
     <div>
-      <section className="relative mx-auto grid min-h-[calc(100vh-7rem)] max-w-6xl items-center gap-10 px-4 pb-16 pt-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="animate-rise">
-          <div className="mb-5 flex items-center gap-3">
-            <img src={iconUrl} alt="" className="h-14 w-14 hero-loop" />
-            <div>
-              <p className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">OCLaunch</p>
-              <p className="text-sm font-semibold text-action">{PRODUCT.tagline}</p>
+      <section className="relative overflow-hidden border-b border-border bg-ink">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{
+            background:
+              "radial-gradient(900px 480px at 85% 15%, rgba(255,138,76,0.22), transparent 55%), radial-gradient(700px 420px at 8% 85%, rgba(15,118,110,0.14), transparent 50%)",
+          }}
+        />
+        <div className="relative mx-auto grid max-w-6xl gap-8 px-4 pb-14 pt-8 sm:pb-16 sm:pt-10 lg:grid-cols-2 lg:items-center lg:gap-12 lg:pb-20 lg:pt-14">
+          <div className="animate-rise text-canvas">
+            <div className="mb-6 flex items-center gap-3">
+              <img
+                src={iconUrl}
+                alt=""
+                className="h-16 w-16 shrink-0 hero-loop sm:h-[4.5rem] sm:w-[4.5rem]"
+                width={72}
+                height={72}
+              />
+              <div className="min-w-0">
+                <p className="text-3xl font-bold tracking-tight sm:text-4xl">OCLaunch</p>
+                <p className="text-sm font-semibold text-accent sm:text-base">{t("home.tagline")}</p>
+              </div>
+            </div>
+            <h1 className="max-w-xl text-[2.125rem] font-bold leading-[1.12] tracking-tight sm:text-5xl">
+              {t("home.headline")}
+            </h1>
+            <p className="mt-4 max-w-md text-base text-[#DFE4E2] sm:text-lg">
+              {t("home.support")}
+            </p>
+            <div className="mt-8 flex w-full flex-col gap-3 sm:max-w-md sm:flex-row">
+              <Link to={me ? "/app/new" : "/signin?next=/app/new"} className="sm:flex-1">
+                <Button className="w-full">{t("home.cta.add")}</Button>
+              </Link>
+              <Link to={reviewHref} className="sm:flex-1">
+                <Button variant="secondary" className="w-full bg-canvas text-ink">
+                  {t("home.cta.review")}
+                </Button>
+              </Link>
             </div>
           </div>
-          <h1 className="max-w-xl text-4xl font-bold leading-[1.1] tracking-tight text-ink sm:text-5xl">
-            {PRODUCT.headline}
-          </h1>
-          <p className="mt-4 max-w-lg text-lg text-muted">{PRODUCT.support}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/app/new">
-              <Button>{PRODUCT.primaryCta}</Button>
-            </Link>
-            <Link to="/discover">
-              <Button variant="secondary">{PRODUCT.secondaryCta}</Button>
-            </Link>
-          </div>
-        </div>
-        <div
-          className="animate-rise-delay relative min-h-[320px] overflow-hidden rounded-none border-y border-border bg-ink text-canvas lg:min-h-[420px] lg:rounded-[24px] lg:border"
-          aria-label="Labeled product example of the review loop"
-        >
-          <div
-            className="absolute inset-0 opacity-40"
-            style={{
-              background:
-                "radial-gradient(circle at 20% 20%, #FF8A4C55, transparent 40%), radial-gradient(circle at 80% 70%, #0F766E55, transparent 45%)",
-            }}
-          />
-          <div className="relative flex h-full flex-col justify-between p-6 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#DFE4E2]">
-              Example loop · fictional demo product
-            </p>
-            <ol className="space-y-4 text-sm sm:text-base">
-              <li>
-                <span className="font-semibold text-accent">1. Capture release</span>
-                <p className="text-[#DFE4E2]">Freeze a URL, viewport, and ruleset version.</p>
-              </li>
-              <li>
-                <span className="font-semibold text-accent">2. Focused review</span>
-                <p className="text-[#DFE4E2]">
-                  “Create your first weekly plan without help.”
-                </p>
-              </li>
-              <li>
-                <span className="font-semibold text-accent">3. Improve with evidence</span>
-                <p className="text-[#DFE4E2]">Accept findings, export tasks, or open a draft PR.</p>
-              </li>
-              <li>
-                <span className="font-semibold text-[#5EEAD4]">4. Verify & report</span>
-                <p className="text-[#DFE4E2]">Record what got better before the next release.</p>
-              </li>
-            </ol>
-          </div>
-        </div>
-      </section>
 
-      <section className="border-t border-border bg-surface/60">
-        <div className="mx-auto max-w-6xl px-4 py-14">
-          <h2 className="text-2xl font-bold">The improvement loop</h2>
-          <p className="mt-2 max-w-2xl text-muted">
-            Add a project, capture a release, collect evidence, select improvements, then verify
-            what shipped. A merged PR alone is not a completed loop.
-          </p>
-          <div className="mt-8 grid gap-6 md:grid-cols-3">
-            {[
-              ["Useful reviews", "Task outcomes, pins, and distinguishable finding sources."],
-              ["Reviewable changes", "Agent export now; sandbox preview + draft PR when configured."],
-              ["Evidence-based reports", "Coverage, accepted work, and the next three actions."],
-            ].map(([title, body]) => (
-              <div key={title}>
-                <h3 className="font-semibold">{title}</h3>
-                <p className="mt-1 text-sm text-muted">{body}</p>
-              </div>
-            ))}
+          <div
+            className="animate-rise-delay relative min-h-[280px] overflow-hidden rounded-[16px] border border-[#2a3d44] bg-[#132024] text-canvas sm:min-h-[340px] lg:min-h-[380px] lg:rounded-[24px]"
+            aria-label={t("home.example.label")}
+          >
+            <div className="relative flex h-full flex-col justify-between p-5 sm:p-7">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+                {t("home.example.label")}
+              </p>
+              <ol className="mt-6 space-y-3.5 text-sm sm:mt-8 sm:space-y-4 sm:text-base">
+                <li className="border-l-2 border-accent pl-3">
+                  <span className="font-semibold text-accent">{t("home.example.capture")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.captureBody")}</p>
+                </li>
+                <li className="border-l-2 border-accent pl-3">
+                  <span className="font-semibold text-accent">{t("home.example.review")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.reviewBody")}</p>
+                </li>
+                <li className="border-l-2 border-accent pl-3">
+                  <span className="font-semibold text-accent">{t("home.example.improve")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.improveBody")}</p>
+                </li>
+                <li className="border-l-2 border-positive pl-3">
+                  <span className="font-semibold text-[#5EEAD4]">{t("home.example.verify")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.verifyBody")}</p>
+                </li>
+              </ol>
+            </div>
           </div>
         </div>
       </section>
