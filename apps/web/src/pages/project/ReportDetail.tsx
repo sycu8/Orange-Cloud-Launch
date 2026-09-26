@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, useLabel } from "../../lib/i18n";
+import { categoryLabel, outcomeLabel, plainStoredLine, stateLabel } from "../../lib/plain-copy";
 import { Button, EmptyState, Notice, StatusPill } from "../../components/ui";
 
 type ReportSummary = {
@@ -46,15 +47,25 @@ type ReportRow = {
   summary: ReportSummary;
 };
 
-function outcomeLabel(key: string) {
-  return key.replaceAll("_", " ");
+function formatWhen(value: string | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function connectedVersion(sha: string | null | undefined) {
+  if (!sha || sha === "not-connected" || sha.length < 7) return null;
+  return sha;
 }
 
 export function ReportDetailPage() {
   const { id, reportId } = useParams();
   const { t } = useI18n();
+  const label = useLabel();
   const [report, setReport] = useState<ReportRow | null>(null);
   const [sharePath, setSharePath] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,6 +77,7 @@ export function ReportDetailPage() {
 
   async function share() {
     if (!id || !reportId) return;
+    setCopied(false);
     try {
       const res = await api<{ path: string }>(
         `/api/projects/${id}/reports/${reportId}/shares`,
@@ -74,6 +86,23 @@ export function ReportDetailPage() {
       setSharePath(res.path);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
+    }
+  }
+
+  const shareUrl =
+    sharePath && typeof window !== "undefined"
+      ? sharePath.startsWith("http")
+        ? sharePath
+        : `${window.location.origin}${sharePath}`
+      : sharePath;
+
+  async function copyShare() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+    } catch {
+      setError(t("reports.copyFailed"));
     }
   }
 
@@ -94,41 +123,73 @@ export function ReportDetailPage() {
   const humanFindings = findings.filter((f) => f.provenance === "human_observation");
   const otherFindings = findings.filter((f) => f.provenance !== "human_observation");
   const outcomeEntries = Object.entries(summary.human_reviews?.outcome_counts ?? {});
+  const versionCode = connectedVersion(summary.commit_sha);
+  const ruleset = summary.ruleset_version ?? report.ruleset_version;
+  const nextActions = summary.next_three_actions ?? [];
+  const untested = summary.untested_scope ?? [];
+  const sampleSize = summary.human_reviews?.sample_size ?? 0;
 
   return (
     <div>
       <p className="text-sm text-muted">
         <Link to={`/app/projects/${id}/reports`} className="text-muted">
           {t("nav.reports")}
-        </Link>{" "}
-        / v{report.version}
+        </Link>
       </p>
-      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">{summary.label ?? `Report v${report.version}`}</h2>
+      <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="break-words text-2xl font-bold">
+            {summary.label ?? t("reports.record")}
+          </h2>
           <p className="mt-1 text-sm text-muted">
-            {t("reports.captured")} {summary.captured_at ?? report.created_at}
-            {summary.commit_sha ? ` · ${summary.commit_sha}` : ""}
-            {` · ${t("reports.ruleset")} ${summary.ruleset_version ?? report.ruleset_version}`}
+            {t("reports.captured")} {formatWhen(summary.captured_at ?? report.created_at)}
           </p>
-          <p className="mt-1 text-sm text-muted">
-            {t("reports.environment")}: <strong>{summary.environment ?? "preview"}</strong>
-            {summary.reviewed_url ? ` · ${t("reports.tried")} ${summary.reviewed_url}` : ""}
+          <p className="mt-1 break-all text-sm text-muted">
+            {t("reports.environment")}:{" "}
+            <strong>{label("env", summary.environment ?? "preview")}</strong>
+            {summary.reviewed_url ? (
+              <>
+                {" "}
+                · {t("reports.tried")} {summary.reviewed_url}
+              </>
+            ) : null}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link to={`/app/projects/${id}/releases/${report.release_id}`}>
-            <Button variant="secondary">{t("reports.openRelease")}</Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <Link to={`/app/projects/${id}/releases/${report.release_id}`} className="w-full sm:w-auto">
+            <Button variant="secondary" className="w-full sm:w-auto">
+              {t("reports.openRelease")}
+            </Button>
           </Link>
-          <Button onClick={() => void share()}>{t("reports.createShare")}</Button>
+          <Button className="w-full sm:w-auto" onClick={() => void share()}>
+            {t("reports.createShare")}
+          </Button>
         </div>
       </div>
+
+      {versionCode || ruleset ? (
+        <details className="mt-4 rounded-[12px] border border-border p-3">
+          <summary className="min-h-[44px] cursor-pointer text-sm font-semibold">
+            {t("changes.tech")}
+          </summary>
+          <p className="mt-2 text-sm text-muted">{t("reports.techHelp")}</p>
+          {versionCode ? (
+            <p className="mt-2 break-all text-sm">
+              {t("reports.techVersion")}: {versionCode}
+            </p>
+          ) : null}
+          {ruleset ? (
+            <p className="mt-1 text-sm text-muted">
+              {t("reports.ruleset")}: {ruleset}
+            </p>
+          ) : null}
+        </details>
+      ) : null}
 
       {summary.environment_gap ? (
         <div className="mt-4">
           <Notice title={t("reports.envGapTitle")} tone="danger">
-            <p>{summary.environment_gap.message}</p>
-            <p className="mt-1">
+            <p className="break-all">
               {t("findings.tried")}: {summary.environment_gap.reviewedUrl}
               <br />
               {t("reports.live")}: {summary.environment_gap.liveUrl}
@@ -139,15 +200,14 @@ export function ReportDetailPage() {
       ) : (
         <div className="mt-4">
           <Notice title={t("reports.snapshotTitle")} tone="action">
-            {summary.note ?? t("reports.snapshotDefault")}
+            {t("reports.snapshotDefault")}
           </Notice>
         </div>
       )}
 
       <h3 className="mt-8 text-lg font-semibold">{t("reports.humanOutcomes")}</h3>
       <p className="text-sm text-muted">
-        {t("reports.sampleSize")} {summary.human_reviews?.sample_size ?? 0}.{" "}
-        {summary.human_reviews?.note ?? "could_not_complete counts as useful critical feedback."}
+        {t("reports.sampleSize")}: {sampleSize}. {t("reports.sampleNote")}
       </p>
       {outcomeEntries.length === 0 ? (
         <p className="mt-2 text-sm text-muted">{t("reports.noCommunity")}</p>
@@ -156,7 +216,7 @@ export function ReportDetailPage() {
           {outcomeEntries.map(([key, n]) => (
             <li key={key}>
               <StatusPill tone={key === "could_not_complete" ? "action" : "neutral"}>
-                {n} {outcomeLabel(key)}
+                {n} {outcomeLabel(t, key)}
               </StatusPill>
             </li>
           ))}
@@ -186,18 +246,26 @@ export function ReportDetailPage() {
       )}
 
       <h3 className="mt-8 text-lg font-semibold">{t("reports.untested")}</h3>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-        {(summary.untested_scope ?? []).map((s) => (
-          <li key={s}>{s}</li>
-        ))}
-      </ul>
+      {untested.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">{t("reports.untestedNone")}</p>
+      ) : (
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
+          {untested.map((item) => (
+            <li key={item}>{plainStoredLine(t, item)}</li>
+          ))}
+        </ul>
+      )}
 
       <h3 className="mt-8 text-lg font-semibold">{t("reports.nextThree")}</h3>
-      <ol className="mt-2 list-decimal space-y-2 pl-5">
-        {(summary.next_three_actions ?? []).map((a) => (
-          <li key={a}>{a}</li>
-        ))}
-      </ol>
+      {nextActions.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">{t("reports.nextNone")}</p>
+      ) : (
+        <ol className="mt-2 list-decimal space-y-2 pl-5">
+          {nextActions.map((action) => (
+            <li key={action}>{plainStoredLine(t, action)}</li>
+          ))}
+        </ol>
+      )}
 
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
         <div className="rounded-[16px] border border-border bg-surface p-4">
@@ -236,12 +304,12 @@ export function ReportDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold">{f.title}</p>
                 <StatusPill tone={f.state === "verified" ? "positive" : "action"}>
-                  {f.state.replaceAll("_", " ")}
+                  {stateLabel(t, f.state)}
                 </StatusPill>
-                <StatusPill tone="neutral">{f.provenance.replaceAll("_", " ")}</StatusPill>
+                <StatusPill tone="neutral">{label("provenance", f.provenance)}</StatusPill>
               </div>
               <p className="mt-1 text-sm text-muted">
-                {f.category} · {f.severity}
+                {categoryLabel(t, f.category)} · {label("severity", f.severity)}
               </p>
             </li>
           ))}
@@ -254,10 +322,16 @@ export function ReportDetailPage() {
         </p>
       ) : null}
 
-      {sharePath ? (
+      {shareUrl ? (
         <div className="mt-6">
           <Notice title={t("reports.shareCreated")} tone="positive">
-            <a href={sharePath}>{sharePath}</a> — {t("reports.shareRevocable")}
+            <a className="break-all" href={sharePath ?? shareUrl}>
+              {shareUrl}
+            </a>
+            <p className="mt-2">{t("reports.shareRevocable")}</p>
+            <Button className="mt-3 w-full sm:w-auto" variant="secondary" onClick={() => void copyShare()}>
+              {copied ? t("reports.copied") : t("reports.copyLink")}
+            </Button>
           </Notice>
         </div>
       ) : null}

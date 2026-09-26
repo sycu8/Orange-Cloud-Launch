@@ -85,7 +85,7 @@ export function ReportsPage() {
       {compare ? (
         <div className="mt-4">
           <Notice title={t("reports.comparison")} tone="action">
-            <p>{compare.note}</p>
+            <p>{t("reports.compareNote")}</p>
             <p className="mt-2">
               {t("reports.new")}:{" "}
               {compare.newFindingTitles.length

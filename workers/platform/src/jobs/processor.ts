@@ -418,8 +418,8 @@ async function handleReport(
           liveUrl,
           message:
             environment === "production"
-              ? "Reviewed URL differs from the project live URL — do not treat this as verified on production live."
-              : `Human tried ${environment} at a URL that is not the project live URL.`,
+              ? "The link people tried is not the live site. Do not treat this as checked on the live site."
+              : "People tried a link that is not the live site.",
         }
       : null;
 
@@ -452,7 +452,7 @@ async function handleReport(
         outcome: (r as { outcome: string }).outcome,
         audience_fit: (r as { audience_fit: string }).audience_fit,
       })),
-      note: "could_not_complete is a successful critical review — praise is not required.",
+      note: "If someone could not finish, that still counts. You do not need praise.",
     },
     reopened_findings: reopened,
     verified_not_rechecked: verifiedNotRechecked.map((f) => ({
@@ -464,18 +464,18 @@ async function handleReport(
     counts_by_provenance: byProvenance,
     previous_release: previous ?? null,
     untested_scope: [
-      "Cross-browser rendering beyond Chromium Browser Run",
-      "Authenticated multi-step journeys",
-      "Performance budgets",
+      "Other browsers besides the automatic check.",
+      "Steps that need someone who is signed in.",
+      "How fast the page loads.",
       ...(byProvenance.browser_observation
         ? []
-        : ["Browser Run human-tester viewport snapshots were not captured for this release"]),
+        : ["An automatic look at the page was not saved for this version."]),
       ...(environment !== "production"
-        ? ["Production live URL was not the human review target for this report"]
+        ? ["People did not try the live site for this record."]
         : []),
     ],
     next_three_actions: nextActions,
-    note: "No universal readiness score. Human task results first; deterministic fetch notes are not human outcomes.",
+    note: "This is a record of what people tried. It is not a score. A note from a person comes first. An automatic check is not the same as someone finishing the task.",
   };
 
   const versionRow = await env.DB.prepare(
@@ -582,15 +582,15 @@ function recommendNextActions(
   const needsEvidence = findings.filter((f) => f.state === "needs_evidence");
   const observed = findings.filter((f) => f.state === "observed");
   const actions: string[] = [];
-  if (accepted[0]) actions.push(`Preview or export an improvement for: ${accepted[0].title}`);
-  if (needsEvidence[0]) actions.push(`Collect more evidence for: ${needsEvidence[0].title}`);
-  if (observed[0]) actions.push(`Triage open finding: ${observed[0].title}`);
+  if (accepted[0]) actions.push(`Hand off a fix for: ${accepted[0].title}`);
+  if (needsEvidence[0]) actions.push(`Add a clearer note for: ${needsEvidence[0].title}`);
+  if (observed[0]) actions.push(`Decide what to do about: ${observed[0].title}`);
   while (actions.length < 3) {
     actions.push(
       [
-        "Capture the next release after deploying changes",
-        "Open a focused Review Mission for first-use",
-        "Approve a brand version before the next visual pass",
+        "Save the next version after the fix is live.",
+        "Ask someone to try the main task.",
+        "Look at the page again before the next change.",
       ][actions.length]!,
     );
   }

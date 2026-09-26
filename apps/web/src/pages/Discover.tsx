@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { useI18n } from "../lib/i18n";
+import { useI18n, useLabel } from "../lib/i18n";
 import { Button, EmptyState, PageHeader, StatusPill } from "../components/ui";
 
 type DiscoverProject = {
@@ -19,6 +19,7 @@ type DiscoverProject = {
 export function DiscoverPage() {
   const { me } = useAuth();
   const { t } = useI18n();
+  const label = useLabel();
   const [projects, setProjects] = useState<DiscoverProject[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,7 +71,7 @@ export function DiscoverPage() {
                 </Link>
                 <p className="text-sm text-muted">{p.purpose}</p>
                 <p className="mt-1 text-xs text-muted">
-                  {p.category} · {t("project.new.audience")} {p.audience}
+                  {label("projectCategory", p.category)} · {t("project.new.audience")} {p.audience}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">

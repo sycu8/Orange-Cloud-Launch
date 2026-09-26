@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useI18n, useLabel } from "../../lib/i18n";
+import { FINDING_CATEGORY_VALUES, categoryLabel, stateLabel } from "../../lib/plain-copy";
 import { Button, EmptyState, Input, Label, Notice, StatusPill, TextArea } from "../../components/ui";
 import { getCsrfToken } from "../../lib/api";
 
@@ -67,7 +68,7 @@ export function ReleaseWorkspacePage() {
           dismissRationale: state === "dismissed" ? dismissRationale : undefined,
         }),
       });
-      setNote(`${t("release.marked")}: ${t(`changes.state.${state}`) === `changes.state.${state}` ? state.replaceAll("_", " ") : t(`changes.state.${state}`)}`);
+      setNote(`${t("release.marked")}: ${stateLabel(t, state)}`);
       setDismissingId(null);
       setDismissReason("");
       await load();
@@ -259,17 +260,15 @@ export function ReleaseWorkspacePage() {
           <div>
             <Label>{t("release.category")}</Label>
             <select
-              className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
+              className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3 text-base"
               value={findingCategory}
               onChange={(e) => setFindingCategory(e.target.value)}
             >
-              <option>First-use experience</option>
-              <option>Access</option>
-              <option>Regression</option>
-              <option>Clarity</option>
-              <option>Visual consistency</option>
-              <option>Accessibility</option>
-              <option>Release presentation</option>
+              {FINDING_CATEGORY_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {categoryLabel(t, value)}
+                </option>
+              ))}
             </select>
           </div>
           <Button type="submit">{t("release.addFinding")}</Button>
@@ -301,9 +300,7 @@ export function ReleaseWorkspacePage() {
                   <h4 className="font-semibold">{f.title}</h4>
                   <StatusPill tone="neutral">{label("provenance", f.provenance)}</StatusPill>
                   <StatusPill tone={f.state === "verified" ? "positive" : "action"}>
-                    {t(`changes.state.${f.state}`) === `changes.state.${f.state}`
-                      ? f.state.replaceAll("_", " ")
-                      : t(`changes.state.${f.state}`)}
+                    {stateLabel(t, f.state)}
                   </StatusPill>
                   <StatusPill tone="neutral">{label("severity", f.severity)}</StatusPill>
                 </div>
@@ -338,7 +335,7 @@ export function ReleaseWorkspacePage() {
                   <p className="mt-2 whitespace-pre-wrap text-sm text-muted">{f.body}</p>
                 ) : null}
                 <p className="mt-2 text-sm text-muted">
-                  {f.category}
+                  {categoryLabel(t, f.category)}
                   {f.acceptance_criterion
                     ? ` · ${t("findings.criterion")}: ${f.acceptance_criterion}`
                     : ""}

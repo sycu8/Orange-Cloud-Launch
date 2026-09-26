@@ -21,11 +21,11 @@ export function redactReportSummary(full: Record<string, unknown>) {
     ? full.next_three_actions.filter((item): item is string => typeof item === "string")
     : [];
   return {
-    label: typeof full.label === "string" ? full.label : "Release report",
+    label: typeof full.label === "string" ? full.label : "Report",
     captured_at: typeof full.captured_at === "string" ? full.captured_at : "",
     findings,
     next_three_actions: actions,
-    note: "Redacted share — personal evidence and screenshots omitted by default.",
+    note: "Personal notes and screenshots are left out of this link.",
   };
 }
 
@@ -100,7 +100,7 @@ reportRoutes.get("/projects/:projectId/releases/:releaseId/compare/:otherRelease
     },
     newFindingTitles: newInA,
     improvedTitles: resolvedSinceB,
-    note: "Comparison is evidence-based title/state matching — not a readiness score.",
+    note: "This compares problem titles between the two versions. It is not a score.",
   });
 });
 

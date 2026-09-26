@@ -169,7 +169,7 @@ describe("redacted shares", () => {
         },
       ],
       next_three_actions: ["Triage the open finding"],
-      note: "Redacted share — personal evidence and screenshots omitted by default.",
+      note: "Personal notes and screenshots are left out of this link.",
     });
     expect(JSON.stringify(share)).not.toContain("source_url");
     expect(JSON.stringify(share)).not.toContain("secret");
