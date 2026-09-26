@@ -85,16 +85,56 @@ export async function loadSession(
   return { userId: row.user_id, csrfToken: row.csrf_token };
 }
 
-export function requireOrigin(c: Context<AppEnv>, hasSession = false): boolean {
+/** Origins permitted for CSRF and WebAuthn expectedOrigin checks. */
+export function allowedOrigins(env: {
+  APP_ORIGIN: string;
+  APP_ENV: string;
+}): string[] {
+  const origins = new Set<string>([env.APP_ORIGIN]);
+  if (env.APP_ENV === "development") {
+    // Vite (`npm run dev`) proxies /api to wrangler on :8787 while the page is on :5173.
+    for (const host of ["localhost", "127.0.0.1"]) {
+      for (const port of ["5173", "8787"]) {
+        origins.add(`http://${host}:${port}`);
+      }
+    }
+  }
+  return [...origins];
+}
+
+export function isAllowedOrigin(
+  env: { APP_ORIGIN: string; APP_ENV: string },
+  origin: string | undefined,
+  requestUrl: string,
+): boolean {
+  if (!origin) return false;
+  const allowed = new Set(allowedOrigins(env));
+  // Same Worker hostname as this request (covers workers.dev preview hosts).
+  allowed.add(new URL(requestUrl).origin);
+  return allowed.has(origin);
+}
+
+/**
+ * CSRF origin gate. When Origin is present it must be an allowed app origin
+ * (configured APP_ORIGIN, local Vite ports in development, or this request's origin).
+ * Missing Origin is allowed only when Sec-Fetch-Site is not cross-site.
+ */
+export function requireOrigin(c: Context<AppEnv>, _hasSession = false): boolean {
   if (c.req.method === "GET" || c.req.method === "HEAD" || c.req.method === "OPTIONS") {
     return true;
   }
   const path = new URL(c.req.url).pathname;
   if (path === GITHUB_WEBHOOK_PATH) return true;
   const origin = c.req.header("Origin");
-  if (hasSession) return origin === c.env.APP_ORIGIN;
   if (!origin) return c.req.header("Sec-Fetch-Site") !== "cross-site";
-  return origin === c.env.APP_ORIGIN;
+  return isAllowedOrigin(c.env, origin, c.req.url);
+}
+
+/** Prefer the browser Origin when it is allowlisted; otherwise APP_ORIGIN. */
+export function resolveCeremonyOrigin(c: Context<AppEnv>): string {
+  const origin = c.req.header("Origin");
+  if (origin && isAllowedOrigin(c.env, origin, c.req.url)) return origin;
+  return c.env.APP_ORIGIN;
 }
 
 export async function requireCsrf(c: Context<AppEnv>): Promise<boolean> {

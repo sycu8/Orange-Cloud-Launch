@@ -1,7 +1,13 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "./lib/http.js";
 import { jsonErr } from "./lib/http.js";
-import { GITHUB_WEBHOOK_PATH, loadSession, requireCsrf, requireOrigin } from "./auth/session.js";
+import {
+  GITHUB_WEBHOOK_PATH,
+  isAllowedOrigin,
+  loadSession,
+  requireCsrf,
+  requireOrigin,
+} from "./auth/session.js";
 import { timingSafeEqual } from "./lib/secret.js";
 import { newId } from "./lib/ids.js";
 import { authRoutes } from "./routes/auth.js";
@@ -35,9 +41,9 @@ app.use("*", async (c, next) => {
 });
 
 app.use("/api/*", async (c, next) => {
-  // Same-origin API — reflect only configured APP_ORIGIN when CORS is needed for Vite dev proxy edge cases.
+  // Reflect allowlisted Origins (APP_ORIGIN, local Vite ports, this Worker host).
   const origin = c.req.header("Origin");
-  if (origin && origin === c.env.APP_ORIGIN) {
+  if (origin && isAllowedOrigin(c.env, origin, c.req.url)) {
     c.header("Access-Control-Allow-Origin", origin);
     c.header("Access-Control-Allow-Credentials", "true");
     c.header(

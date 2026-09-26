@@ -32,7 +32,7 @@ For a split Vite UI + API proxy:
 npm run dev
 ```
 
-UI: `http://localhost:5173` · API: `http://localhost:8787`
+UI: `http://localhost:5173` · API: `http://localhost:8787` (passkey CSRF allows both local origins)
 
 ## Scripts
 

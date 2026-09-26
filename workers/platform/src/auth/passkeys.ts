@@ -10,17 +10,26 @@ import { isLoopbackHostname } from "@oclaunch/shared";
 import { newId, randomToken } from "../lib/ids.js";
 import { nowIso } from "../lib/http.js";
 import { hmacSha256Hex, timingSafeEqual } from "../lib/secret.js";
-import { createSession, revokeAllSessions } from "./session.js";
+import { createSession, resolveCeremonyOrigin, revokeAllSessions } from "./session.js";
 
 export const LOCAL_DEV_USER_ID = "user_local_founder";
 export const RECOVERY_CODE_BYTES = 16;
 const DISPLAY_NAME_MAX = 80;
 
 function rp(c: Context<AppEnv>) {
+  // expectedOrigin must match clientDataJSON.origin (e.g. Vite :5173 vs wrangler :8787).
+  // RP ID must be the ceremony hostname or a registrable suffix of it.
+  const origin = resolveCeremonyOrigin(c);
+  const hostname = new URL(origin).hostname;
+  const configured = c.env.WEBAUTHN_RP_ID;
+  const rpID =
+    hostname === configured || hostname.endsWith(`.${configured}`)
+      ? configured
+      : hostname;
   return {
-    rpID: c.env.WEBAUTHN_RP_ID,
+    rpID,
     rpName: "OCLaunch",
-    origin: c.env.APP_ORIGIN,
+    origin,
   };
 }
 
