@@ -21,6 +21,7 @@ on:
   # integration token cannot call the Actions dispatch API. A push only
   # deploys staging (never production). Staging deploy applies remote D1
   # migrations before publishing (including 0003_browser_observation.sql).
+  # Browser Run (ENABLE_BROWSER_RUN) ships on by default with the BROWSER binding.
   push:
     branches:
       - main

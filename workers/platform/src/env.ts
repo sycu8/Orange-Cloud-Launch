@@ -11,9 +11,8 @@
  * JOBS queue, REVIEW_FLOW/PATCH_FLOW workflows, BROWSER, AI, ADMISSION DO,
  * GITHUB service binding, BUILDER/Sandbox, project-domain gateway.
  *
- * When Browser Run is provisioned, set ENABLE_BROWSER_RUN=true and add:
- *   [browser]
- *   binding = "BROWSER"
+ * Browser Run is bound by default (`BROWSER`) and ENABLE_BROWSER_RUN=true.
+ * If the binding is absent at runtime, the adapter stays integration_not_configured.
  */
 import type { BrowserRunBinding } from "./integrations/browser.js";
 
