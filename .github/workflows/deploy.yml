@@ -233,6 +233,13 @@ jobs:
           npm run build -w @oclaunch/shared
           npm run build -w @oclaunch/web
 
+      - name: Publish static files to R2
+        working-directory: workers/platform
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node ../../scripts/publish-static-r2.mjs
+
       - name: Apply D1 migrations and deploy
         working-directory: workers/platform
         env:

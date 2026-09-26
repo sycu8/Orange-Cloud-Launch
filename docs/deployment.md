@@ -28,15 +28,19 @@ Staging may still be reachable on `*.workers.dev`; that origin is listed in `APP
 ```bash
 npm run build
 cd workers/platform
+WRANGLER_ENV=staging node ../../scripts/publish-static-r2.mjs
 npx wrangler d1 migrations apply oclaunch-staging --env staging
 npx wrangler deploy --env staging
 ```
+
+`scripts/publish-static-r2.mjs` uploads `apps/web/dist` (HTML, JS, CSS, favicon, and the logo) to the `STATIC` R2 bucket. The Worker serves those objects first and falls back to Workers static assets if an object is missing.
 
 Custom domain in config: `launch-staging.orangecloud.vn`.
 
 ## Production
 
 ```bash
+WRANGLER_ENV=production node ../../scripts/publish-static-r2.mjs
 npx wrangler d1 migrations apply oclaunch-production --env production
 npx wrangler deploy --env production
 ```

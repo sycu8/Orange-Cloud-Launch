@@ -9,7 +9,7 @@ workers_dev = true
 directory = "../../apps/web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/p/*", "/r/*", "/", "/robots.txt", "/sitemap.xml"]
+run_worker_first = ["/api/*", "/p/*", "/r/*", "/", "/index.html", "/favicon.svg", "/assets/*", "/robots.txt", "/sitemap.xml"]
 
 [observability]
 enabled = true
@@ -25,6 +25,11 @@ migrations_dir = "../../migrations"
 binding = "ARTIFACTS"
 bucket_name = "oclaunch-artifacts-local"
 preview_bucket_name = "oclaunch-artifacts-local"
+
+[[r2_buckets]]
+binding = "STATIC"
+bucket_name = "oclaunch-static-local"
+preview_bucket_name = "oclaunch-static-local"
 
 [vars]
 APP_ENV = "development"
@@ -74,6 +79,9 @@ migrations_dir = "../../migrations"
 [[env.staging.r2_buckets]]
 binding = "ARTIFACTS"
 bucket_name = "oclaunch-artifacts-staging"
+[[env.staging.r2_buckets]]
+binding = "STATIC"
+bucket_name = "oclaunch-static-staging"
 
 [env.production]
 name = "oclaunch-platform-production"
@@ -100,3 +108,6 @@ migrations_dir = "../../migrations"
 [[env.production.r2_buckets]]
 binding = "ARTIFACTS"
 bucket_name = "oclaunch-artifacts-production"
+[[env.production.r2_buckets]]
+binding = "STATIC"
+bucket_name = "oclaunch-static-production"
