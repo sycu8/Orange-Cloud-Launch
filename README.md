@@ -4,7 +4,8 @@
 
 OCLaunch helps solo founders turn product feedback into reviewed improvements and better releases.
 
-Platform address (production target): `https://launch.orangecloud.vn`  
+Production: `https://launch.orangecloud.vn`  
+Staging: `https://launch-staging.orangecloud.vn`  
 Parent brand: Orangecloud / `orangecloud.vn`
 
 ## Stack

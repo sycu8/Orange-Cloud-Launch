@@ -14,6 +14,15 @@ Do **not** deploy, change live DNS, or send invitations without explicit owner a
    - `GITHUB_WEBHOOK_SECRET`
 6. Confirm reserved hostnames remain unused by OCLaunch claims: `launch`, `www`, `api`, etc.
 
+## Hostnames
+
+| Environment | Worker | Custom domain | `APP_ORIGIN` / WebAuthn RP ID |
+|-------------|--------|---------------|-------------------------------|
+| staging | `oclaunch-platform-staging` | `launch-staging.orangecloud.vn` | `https://launch-staging.orangecloud.vn` |
+| production | `oclaunch-platform-production` | `launch.orangecloud.vn` | `https://launch.orangecloud.vn` |
+
+Staging may still be reachable on `*.workers.dev`; that origin is listed in `APP_ORIGINS_EXTRA` only.
+
 ## Staging
 
 ```bash
@@ -23,16 +32,18 @@ npx wrangler d1 migrations apply oclaunch-staging --env staging
 npx wrangler deploy --env staging
 ```
 
-Attach only an approved staging hostname (e.g. `launch-staging.orangecloud.vn`) after DNS inventory.
+Custom domain in config: `launch-staging.orangecloud.vn`.
 
 ## Production
-
-The production Worker is `oclaunch-platform-production` on `workers.dev`. `launch.orangecloud.vn` stays on the staging Worker until that route is detached and then attached here.
 
 ```bash
 npx wrangler d1 migrations apply oclaunch-production --env production
 npx wrangler deploy --env production
 ```
+
+Or via Actions: `workflow_dispatch` with environment `production` and confirm `launch.orangecloud.vn`.
+
+Custom domain in config: exact `launch.orangecloud.vn` (no zone-wide wildcard). Deploy staging first so it no longer claims `launch.orangecloud.vn`.
 
 ## Feature flags
 

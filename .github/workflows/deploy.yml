@@ -176,91 +176,47 @@ jobs:
               print("Injected R2 bucket name from CLOUDFLARE_R2_BUCKET_NAME")
           else:
               print("CLOUDFLARE_R2_BUCKET_NAME is not set; using the bucket name in wrangler.toml")
+          # Staging canonical origin is launch-staging.orangecloud.vn (custom domain).
+          # Keep workers.dev in APP_ORIGINS_EXTRA when the account subdomain is known.
           if env == "staging":
               account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
               token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
-              if not account or not token:
-                  print("Missing GitHub Actions secret: CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID")
-                  sys.exit(1)
-              sub_url = (
-                  "https://api.cloudflare.com/client/v4/accounts/"
-                  + urllib.parse.quote(account)
-                  + "/workers/subdomain"
-              )
-              sub_req = urllib.request.Request(sub_url, headers={"Authorization": "Bearer " + token})
-              try:
-                  with urllib.request.urlopen(sub_req) as resp:
-                      sub_payload = json.load(resp)
-              except urllib.error.HTTPError as exc:
-                  print(f"Cloudflare workers subdomain lookup failed with HTTP {exc.code}")
-                  sys.exit(1)
-              subdomain = str((sub_payload.get("result") or {}).get("subdomain") or "").strip()
-              if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", subdomain):
-                  print("Cloudflare account workers.dev subdomain was not returned")
-                  sys.exit(1)
-              host = f"oclaunch-platform-staging.{subdomain}.workers.dev"
-              origin = f"https://{host}"
-              # Keep wrangler.toml in sync if the account workers.dev subdomain changes.
-              for old_host in (
-                  "oclaunch-platform-staging.sycu-lee.workers.dev",
-                  "launch-staging.orangecloud.vn",
-              ):
-                  text = text.replace(
-                      f'APP_ORIGIN = "https://{old_host}"',
-                      f'APP_ORIGIN = "{origin}"',
-                      1,
+              if account and token:
+                  sub_url = (
+                      "https://api.cloudflare.com/client/v4/accounts/"
+                      + urllib.parse.quote(account)
+                      + "/workers/subdomain"
                   )
-                  text = text.replace(
-                      f'WEBAUTHN_RP_ID = "{old_host}"',
-                      f'WEBAUTHN_RP_ID = "{host}"',
-                      1,
-                  )
-              if f'APP_ORIGIN = "{origin}"' not in text:
-                  print("workers/platform/wrangler.toml is missing a staging APP_ORIGIN to rewrite")
+                  sub_req = urllib.request.Request(sub_url, headers={"Authorization": "Bearer " + token})
+                  try:
+                      with urllib.request.urlopen(sub_req) as resp:
+                          sub_payload = json.load(resp)
+                      subdomain = str((sub_payload.get("result") or {}).get("subdomain") or "").strip()
+                      if re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", subdomain):
+                          workers_host = f"oclaunch-platform-staging.{subdomain}.workers.dev"
+                          text = text.replace(
+                              'APP_ORIGINS_EXTRA = "https://oclaunch-platform-staging.sycu-lee.workers.dev"',
+                              f'APP_ORIGINS_EXTRA = "https://{workers_host}"',
+                              1,
+                          )
+                          print(f"Staging workers.dev extra origin: https://{workers_host}")
+                  except urllib.error.HTTPError as exc:
+                      print(f"Cloudflare workers subdomain lookup failed with HTTP {exc.code} (continuing)")
+              if 'APP_ORIGIN = "https://launch-staging.orangecloud.vn"' not in text:
+                  print("workers/platform/wrangler.toml is missing staging APP_ORIGIN launch-staging.orangecloud.vn")
                   sys.exit(1)
-              print(f"Staging public URL: {origin}")
+              print("Staging public URL: https://launch-staging.orangecloud.vn")
           if env == "production":
-              account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
-              token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
-              if not account or not token:
-                  print("Missing GitHub Actions secret: CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID")
+              if 'APP_ORIGIN = "https://launch.orangecloud.vn"' not in text:
+                  print("workers/platform/wrangler.toml is missing production APP_ORIGIN launch.orangecloud.vn")
                   sys.exit(1)
-              sub_url = (
-                  "https://api.cloudflare.com/client/v4/accounts/"
-                  + urllib.parse.quote(account)
-                  + "/workers/subdomain"
-              )
-              sub_req = urllib.request.Request(sub_url, headers={"Authorization": "Bearer " + token})
-              try:
-                  with urllib.request.urlopen(sub_req) as resp:
-                      sub_payload = json.load(resp)
-              except urllib.error.HTTPError as exc:
-                  print(f"Cloudflare workers subdomain lookup failed with HTTP {exc.code}")
-                  sys.exit(1)
-              subdomain = str((sub_payload.get("result") or {}).get("subdomain") or "").strip()
-              if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", subdomain):
-                  print("Cloudflare account workers.dev subdomain was not returned")
-                  sys.exit(1)
-              host = f"oclaunch-platform-production.{subdomain}.workers.dev"
-              origin = f"https://{host}"
-              text = text.replace(
-                  'APP_ORIGIN = "https://launch.orangecloud.vn"',
-                  f'APP_ORIGIN = "{origin}"',
-                  1,
-              )
-              text = text.replace(
-                  'WEBAUTHN_RP_ID = "launch.orangecloud.vn"',
-                  f'WEBAUTHN_RP_ID = "{host}"',
-                  1,
-              )
-              prod = text.split("[env.production]", 1)[-1]
-              for line in prod.splitlines():
+              staging = text.split("[env.staging]", 1)[-1].split("[env.production]", 1)[0]
+              for line in staging.splitlines():
                   stripped = line.strip()
-                  if stripped.startswith("routes") and "launch.orangecloud.vn" in stripped:
-                      print("Refusing to deploy production while it claims launch.orangecloud.vn")
+                  if stripped.startswith("routes") and "launch.orangecloud.vn" in stripped and "launch-staging" not in stripped:
+                      print("Refusing to deploy production while staging still claims launch.orangecloud.vn")
                       sys.exit(1)
-              print(f"Production public URL: {origin}")
-              print("launch.orangecloud.vn stays on the staging Worker")
+              print("Production public URL: https://launch.orangecloud.vn")
           path.write_text(text)
           print(f"Injected D1 database id for {env} from {source}")
           PY
