@@ -18,7 +18,8 @@ if (start < 0) {
   process.exit(1);
 }
 const rest = toml.slice(start + marker.length);
-const next = rest.search(/\n\[env\./);
+// Stop at the next environment, not at [env.staging.vars] or [env.staging.browser].
+const next = rest.search(new RegExp(`\\n\\[env\\.(?!${envName}\\b)`));
 const block = next === -1 ? rest : rest.slice(0, next);
 const bucket = block
   .split("[[")
