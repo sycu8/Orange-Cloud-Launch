@@ -98,13 +98,31 @@ export function ReleaseWorkspacePage() {
     setError(null);
     setNote(null);
     try {
-      await api(`/api/projects/${id}/releases/${releaseId}/runs`, {
+      const result = await api<{
+        job: { state: string; result_json?: string };
+      }>(`/api/projects/${id}/releases/${releaseId}/runs`, {
         method: "POST",
         body: "{}",
       });
-      setNote(
-        "Automated checks finished. Deterministic findings may appear below; Browser Run stays not-configured until credentials are set.",
-      );
+      const parsed = result.job.result_json
+        ? (JSON.parse(result.job.result_json) as {
+            browser?: { status?: string; captureCount?: number; message?: string };
+          })
+        : null;
+      if (parsed?.browser?.status === "completed" && (parsed.browser.captureCount ?? 0) > 0) {
+        setNote(
+          `Automated checks finished. Browser Run captured ${parsed.browser.captureCount} human-tester snapshot(s). Deterministic and browser notes are not human outcomes.`,
+        );
+      } else if (parsed?.browser?.status === "integration_not_configured") {
+        setNote(
+          "Automated checks finished. Deterministic findings may appear below; Browser Run stays not-configured until credentials are set.",
+        );
+      } else {
+        setNote(
+          parsed?.browser?.message ??
+            "Automated checks finished. Review findings below — human task results still come from reviewers.",
+        );
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");

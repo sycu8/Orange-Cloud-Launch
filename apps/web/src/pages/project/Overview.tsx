@@ -142,14 +142,29 @@ export function ProjectOverviewPage() {
         { method: "POST", body: "{}" },
       );
       const parsed = result.job.result_json
-        ? (JSON.parse(result.job.result_json) as { status?: string; message?: string })
+        ? (JSON.parse(result.job.result_json) as {
+            status?: string;
+            message?: string;
+            browser?: { status?: string; captureCount?: number; message?: string };
+          })
         : null;
       if (parsed?.status === "quota_exceeded") {
         setError(parsed.message ?? "Quota exceeded");
       } else if (parsed?.status === "completed") {
-        setMessage(
-          `Automated review finished (${result.job.state}). Browser Run may still be not-configured — check findings.`,
-        );
+        const browserStatus = parsed.browser?.status;
+        if (browserStatus === "completed" && (parsed.browser?.captureCount ?? 0) > 0) {
+          setMessage(
+            `Automated review finished. Browser Run human-tester saved ${parsed.browser?.captureCount} viewport snapshot(s). Human reviews still count separately.`,
+          );
+        } else if (browserStatus === "integration_not_configured") {
+          setMessage(
+            `Automated review finished (${result.job.state}). Browser Run is not configured — deterministic notes only; not human outcomes.`,
+          );
+        } else {
+          setMessage(
+            `Automated review finished (${result.job.state}). ${parsed.browser?.message ?? "Check findings."}`,
+          );
+        }
       } else {
         setMessage(`Job ${result.job.state}`);
       }

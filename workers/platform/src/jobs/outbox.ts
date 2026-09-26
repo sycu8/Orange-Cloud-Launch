@@ -3,6 +3,7 @@ import type { AppEnv } from "../lib/http.js";
 import { newId } from "../lib/ids.js";
 import { nowIso } from "../lib/http.js";
 import { processJob } from "./processor.js";
+import type { BrowserRunBinding } from "../integrations/browser.js";
 
 export async function enqueueJob(
   c: Context<AppEnv>,
@@ -91,6 +92,7 @@ export async function relayOutbox(env: EnvLike, limit = 25): Promise<number> {
 type EnvLike = {
   DB: D1Database;
   ARTIFACTS: R2Bucket;
+  BROWSER?: BrowserRunBinding;
   ENABLE_BROWSER_RUN: string;
   ENABLE_WORKERS_AI: string;
   ENABLE_PATCH_PR: string;

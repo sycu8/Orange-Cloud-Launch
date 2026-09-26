@@ -33,7 +33,7 @@ See also `docs/oclaunch-architecture.svg` and `docs/control-plane.mmd` from the 
 | Binding | Purpose | Honest state when missing |
 |---------|---------|---------------------------|
 | `JOBS` queue | Async ingress | Sync outbox processor in-process |
-| `BROWSER` | Viewport captures | `integration_not_configured` |
+| `BROWSER` | Human-tester viewport snapshots + route discovery via Browser Run Quick Actions | `integration_not_configured` (never claims screenshots) |
 | `AI` | Model suggestions | Empty suggestions (no fakes) |
 | `GITHUB` service | Draft PR broker | Webhook/PR disabled |
 | `BUILDER` / Sandbox | Isolated builds | Patch job not-configured |

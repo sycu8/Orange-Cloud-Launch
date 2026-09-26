@@ -43,7 +43,7 @@ Production route in config: exact Custom Domain `launch.orangecloud.vn` (no zone
 | `SESSION_SECRET` | secret | Pepper for recovery codes. Required before passkey registration |
 | `ENABLE_PATCH_PR` | `false` | Draft PR / sandbox path |
 | `ENABLE_PROJECT_DOMAINS` | `false` | Gateway activation |
-| `ENABLE_BROWSER_RUN` | `false` | Browser Rendering |
+| `ENABLE_BROWSER_RUN` | `false` | Browser Run human-tester (requires `[browser] binding = "BROWSER"`) |
 | `ENABLE_WORKERS_AI` | `false` | Workers AI suggestions |
 
 ## Rollback notes

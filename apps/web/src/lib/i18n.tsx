@@ -232,7 +232,7 @@ const en: Dict = {
   "reports.envGapWarn": "Do not claim production verification from a localhost or preview try.",
   "reports.snapshotTitle": "Evidence-based snapshot",
   "reports.snapshotDefault":
-    "No universal readiness score. Coverage and concrete outcomes only.",
+    "No universal readiness score. Human task results first; deterministic fetch notes are not human outcomes.",
   "reports.humanOutcomes": "Human outcomes",
   "reports.sampleSize": "Sample size",
   "reports.noCommunity": "No community reviews attached to this release yet.",
@@ -544,7 +544,7 @@ const vi: Dict = {
     "Không tuyên bố xác minh production từ thử nghiệm localhost hoặc preview.",
   "reports.snapshotTitle": "Ảnh chụp dựa trên bằng chứng",
   "reports.snapshotDefault":
-    "Không có điểm sẵn sàng phổ quát. Chỉ độ phủ và kết quả cụ thể.",
+    "Không có điểm sẵn sàng phổ quát. Kết quả nhiệm vụ của con người trước; ghi chú fetch xác định không phải kết quả từ con người.",
   "reports.humanOutcomes": "Kết quả từ con người",
   "reports.sampleSize": "Cỡ mẫu",
   "reports.noCommunity": "Chưa có đánh giá cộng đồng gắn với bản phát hành này.",

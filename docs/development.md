@@ -9,7 +9,7 @@ Copy `.env.example` into `workers/platform/.dev.vars`. Set `SESSION_SECRET` and 
 1. Sign in (dev login or passkey).
 2. **Add your project** (private by default).
 3. Capture a release URL.
-4. Run automated review (deterministic checks always; Browser Run reports not-configured).
+4. Run automated review (deterministic checks always). With `ENABLE_BROWSER_RUN=true` and a `BROWSER` binding, Browser Run acts as a human tester: opens the release URL, discovers same-origin routes, captures desktop/phone snapshots, and records `browser_observation` findings (never labeled as human outcomes).
 5. Create a Review Mission and open the invite as a second user.
 6. Accept findings → create change set → **Export for coding agent**.
 7. Generate a release report and optional redacted share (`/r/:id`).
