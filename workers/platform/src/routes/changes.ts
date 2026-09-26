@@ -5,6 +5,7 @@ import { jsonErr, jsonOk, nowIso } from "../lib/http.js";
 import { newId } from "../lib/ids.js";
 import { audit, requireMember } from "../db/access.js";
 import { enqueueJob } from "../jobs/outbox.js";
+import { detectStackFromPackageJson } from "../integrations/stack.js";
 
 export const changeRoutes = new Hono<AppEnv>();
 
@@ -74,6 +75,30 @@ changeRoutes.post("/projects/:projectId/changes", async (c) => {
   await c.env.DB.batch(stmts);
   await audit(c, "change_set.create", "change_set", id, projectId);
   return jsonOk(c, { id }, 201);
+});
+
+changeRoutes.post("/projects/:projectId/stack-detect", async (c) => {
+  const projectId = c.req.param("projectId");
+  const role = await requireMember(c, projectId, ["owner", "maintainer"]);
+  if (!role) return jsonErr(c, "FORBIDDEN", "Maintainer access required", 403);
+  const body = await c.req.json<{ packageJson?: string }>().catch(() => ({}));
+  const raw = (body as { packageJson?: string }).packageJson?.trim();
+  if (!raw) {
+    return jsonErr(c, "VALIDATION", "Paste package.json contents for stack detection", 400, {
+      nextAction: "Do not invent filenames from a URL-only scan — paste package.json from the repo",
+    });
+  }
+  const profile = detectStackFromPackageJson(raw);
+  return jsonOk(c, {
+    ...profile,
+    patchPrEnabled: c.env.ENABLE_PATCH_PR === "true",
+    draftPrStatus:
+      profile.supported && c.env.ENABLE_PATCH_PR === "true"
+        ? "integration_not_configured"
+        : profile.supported
+          ? "integration_not_configured"
+          : "use_agent_export",
+  });
 });
 
 changeRoutes.post("/projects/:projectId/changes/:changeId/export", async (c) => {

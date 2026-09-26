@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useOutletContext, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { Button, EmptyState, Notice } from "../../components/ui";
+import type { ProjectDetail } from "./ProjectLayout";
 
 type Report = {
   id: string;
@@ -10,10 +11,19 @@ type Report = {
   created_at: string;
 };
 
+type CompareResult = {
+  newFindingTitles: string[];
+  improvedTitles: string[];
+  counts: { target: Record<string, number>; base: Record<string, number> };
+  note: string;
+};
+
 export function ReportsPage() {
   const { id } = useParams();
+  const { data } = useOutletContext<{ data: ProjectDetail }>();
   const [reports, setReports] = useState<Report[]>([]);
   const [sharePath, setSharePath] = useState<string | null>(null);
+  const [compare, setCompare] = useState<CompareResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -37,12 +47,47 @@ export function ReportsPage() {
     }
   }
 
+  async function runCompare() {
+    const [target, base] = data.releases;
+    if (!target || !base) {
+      setError("Need at least two releases to compare.");
+      return;
+    }
+    try {
+      const res = await api<CompareResult>(
+        `/api/projects/${id}/releases/${target.id}/compare/${base.id}`,
+      );
+      setCompare(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    }
+  }
+
   return (
     <div>
       <h2 className="text-xl font-semibold">Release reports</h2>
       <p className="mt-1 text-sm text-muted">
         Immutable snapshots for deciding what to improve next. No universal readiness score.
       </p>
+      <div className="mt-4">
+        <Button variant="secondary" onClick={() => void runCompare()}>
+          Compare latest two releases
+        </Button>
+      </div>
+      {compare ? (
+        <div className="mt-4">
+          <Notice title="Release comparison" tone="action">
+            <p>{compare.note}</p>
+            <p className="mt-2">
+              New finding titles: {compare.newFindingTitles.length ? compare.newFindingTitles.join("; ") : "none"}
+            </p>
+            <p>
+              Improved since previous:{" "}
+              {compare.improvedTitles.length ? compare.improvedTitles.join("; ") : "none"}
+            </p>
+          </Notice>
+        </div>
+      ) : null}
       {reports.length === 0 ? (
         <div className="mt-4">
           <EmptyState

@@ -20,6 +20,8 @@ export function ChangesPage() {
   const [accepted, setAccepted] = useState<Finding[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [baseSha, setBaseSha] = useState("main-unknown");
+  const [packageJson, setPackageJson] = useState('{\n  "dependencies": {\n    "react": "^19.0.0"\n  },\n  "devDependencies": {\n    "vite": "^7.0.0",\n    "tailwindcss": "^4.0.0"\n  }\n}');
+  const [stackNote, setStackNote] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +42,27 @@ export function ChangesPage() {
   useEffect(() => {
     load().catch((e) => setError(e instanceof Error ? e.message : "Failed"));
   }, [id]);
+
+  async function detectStack() {
+    setError(null);
+    try {
+      const res = await api<{
+        supported: boolean;
+        profile: string;
+        message: string;
+        recommendation: string;
+        draftPrStatus: string;
+      }>(`/api/projects/${id}/stack-detect`, {
+        method: "POST",
+        body: JSON.stringify({ packageJson }),
+      });
+      setStackNote(
+        `${res.profile}: ${res.message} Recommendation: ${res.recommendation.replaceAll("_", " ")}. Draft PR status: ${res.draftPrStatus}.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    }
+  }
 
   async function createChangeSet() {
     try {
@@ -106,6 +129,22 @@ export function ChangesPage() {
         <div className="mt-4 space-y-2">
           <Label>Base commit SHA</Label>
           <Input value={baseSha} onChange={(e) => setBaseSha(e.target.value)} />
+        </div>
+        <div className="mt-4 space-y-2">
+          <Label>Detect repo profile (paste package.json)</Label>
+          <textarea
+            className="min-h-[120px] w-full rounded-[10px] border border-input-border bg-surface px-3 py-2 font-mono text-xs"
+            value={packageJson}
+            onChange={(e) => setPackageJson(e.target.value)}
+          />
+          <Button variant="secondary" type="button" onClick={() => void detectStack()}>
+            Detect stack
+          </Button>
+          {stackNote ? (
+            <Notice title="Stack detection" tone="action">
+              {stackNote}
+            </Notice>
+          ) : null}
         </div>
         <h3 className="mt-4 font-semibold">Accepted findings</h3>
         {accepted.length === 0 ? (

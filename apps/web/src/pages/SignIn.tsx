@@ -11,6 +11,7 @@ export function SignInPage() {
   const [displayName, setDisplayName] = useState("Local Founder");
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<string[] | null>(null);
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [busy, setBusy] = useState(false);
 
   if (!loading && me && !recovery) {
@@ -69,6 +70,24 @@ export function SignInPage() {
     }
   }
 
+  async function redeemRecovery() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api<{ csrfToken: string }>("/api/auth/recovery/redeem", {
+        method: "POST",
+        body: JSON.stringify({ code: recoveryCode }),
+      });
+      setCsrfToken(result.csrfToken);
+      await refresh();
+      nav("/app");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Recovery failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function devLogin() {
     setBusy(true);
     setError(null);
@@ -104,6 +123,17 @@ export function SignInPage() {
           </Button>
           <Button variant="secondary" disabled={busy} onClick={() => void loginPasskey()}>
             Sign in with passkey
+          </Button>
+        </div>
+        <div className="space-y-2 border-t border-border pt-4">
+          <Label>Recovery code</Label>
+          <Input
+            value={recoveryCode}
+            onChange={(e) => setRecoveryCode(e.target.value)}
+            placeholder="Single-use code from passkey registration"
+          />
+          <Button variant="secondary" disabled={busy || !recoveryCode} onClick={() => void redeemRecovery()}>
+            Redeem recovery code
           </Button>
         </div>
         <Notice title="Local development login" tone="action">

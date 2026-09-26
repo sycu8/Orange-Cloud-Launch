@@ -88,6 +88,9 @@ export function ProjectLayout() {
         <NavLink to={`${base}/reports`} className={linkClass}>
           Reports
         </NavLink>
+        <NavLink to={`${base}/domains`} className={linkClass}>
+          Domain
+        </NavLink>
       </nav>
       <Outlet context={{ data, reload: () => api<ProjectDetail>(`/api/projects/${id}`).then(setData) }} />
     </div>

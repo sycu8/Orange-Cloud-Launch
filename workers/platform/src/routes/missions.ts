@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { createMissionSchema, submitReviewSchema } from "@oclaunch/shared";
 import type { AppEnv } from "../lib/http.js";
 import { jsonErr, jsonOk, nowIso } from "../lib/http.js";
@@ -104,26 +104,21 @@ missionRoutes.get("/invite/:token", async (c) => {
   });
 });
 
-missionRoutes.post("/invite/:token/reviews", async (c) => {
-  const userId = c.get("userId");
-  if (!userId) return jsonErr(c, "UNAUTHENTICATED", "Sign in to submit a review", 401);
-  const token = c.req.param("token");
-  const hash = await sha256Hex(token);
-  const mission = await c.env.DB.prepare(
-    `SELECT m.*, p.owner_id FROM missions m
-     JOIN projects p ON p.id = m.project_id
-     WHERE m.invite_token_hash = ? AND m.state = 'open'`,
-  )
-    .bind(hash)
-    .first<{
-      id: string;
-      project_id: string;
-      release_id: string;
-      owner_id: string;
-    }>();
-  if (!mission) return jsonErr(c, "NOT_FOUND", "Invite expired or unknown", 404);
+async function submitReviewForMission(
+  c: Context<AppEnv>,
+  mission: { id: string; project_id: string; release_id: string; owner_id: string },
+  userId: string,
+) {
   if (mission.owner_id === userId) {
     return jsonErr(c, "FORBIDDEN", "Self-review is not allowed", 403);
+  }
+  const existing = await c.env.DB.prepare(
+    `SELECT id FROM reviews WHERE mission_id = ? AND reviewer_id = ?`,
+  )
+    .bind(mission.id, userId)
+    .first();
+  if (existing) {
+    return jsonErr(c, "CONFLICT", "You already reviewed this mission", 409);
   }
   const parsed = submitReviewSchema.safeParse(await c.req.json());
   if (!parsed.success) {
@@ -172,7 +167,6 @@ missionRoutes.post("/invite/:token/reviews", async (c) => {
   ];
 
   for (const pin of parsed.data.pins) {
-    // Ensure artifact belongs to project
     const art = await c.env.DB.prepare(
       `SELECT id FROM artifacts WHERE project_id = ? AND id = ?`,
     )
@@ -198,7 +192,6 @@ missionRoutes.post("/invite/:token/reviews", async (c) => {
     );
   }
 
-  // Credit ledger — helpful critical feedback qualifies; no praise required
   const creditKey = `review:${reviewId}`;
   statements.push(
     c.env.DB.prepare(
@@ -210,4 +203,54 @@ missionRoutes.post("/invite/:token/reviews", async (c) => {
   await c.env.DB.batch(statements);
   await audit(c, "review.submit", "review", reviewId, mission.project_id);
   return jsonOk(c, { reviewId, findingId }, 201);
+}
+
+missionRoutes.post("/invite/:token/reviews", async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return jsonErr(c, "UNAUTHENTICATED", "Sign in to submit a review", 401);
+  const token = c.req.param("token");
+  const hash = await sha256Hex(token);
+  const mission = await c.env.DB.prepare(
+    `SELECT m.id, m.project_id, m.release_id, p.owner_id FROM missions m
+     JOIN projects p ON p.id = m.project_id
+     WHERE m.invite_token_hash = ? AND m.state = 'open'`,
+  )
+    .bind(hash)
+    .first<{
+      id: string;
+      project_id: string;
+      release_id: string;
+      owner_id: string;
+    }>();
+  if (!mission) return jsonErr(c, "NOT_FOUND", "Invite expired or unknown", 404);
+  return submitReviewForMission(c, mission, userId);
+});
+
+/** Public/unlisted open missions can be reviewed from the inbox without the opaque invite token. */
+missionRoutes.post("/missions/:missionId/reviews", async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return jsonErr(c, "UNAUTHENTICATED", "Sign in to submit a review", 401);
+  const missionId = c.req.param("missionId");
+  const mission = await c.env.DB.prepare(
+    `SELECT m.id, m.project_id, m.release_id, m.state, p.owner_id, p.visibility
+     FROM missions m
+     JOIN projects p ON p.id = m.project_id
+     WHERE m.id = ?`,
+  )
+    .bind(missionId)
+    .first<{
+      id: string;
+      project_id: string;
+      release_id: string;
+      state: string;
+      owner_id: string;
+      visibility: string;
+    }>();
+  if (!mission || mission.state !== "open") {
+    return jsonErr(c, "NOT_FOUND", "Mission not open", 404);
+  }
+  if (mission.visibility === "private") {
+    return jsonErr(c, "FORBIDDEN", "Private missions require an invite link", 403);
+  }
+  return submitReviewForMission(c, mission, userId);
 });

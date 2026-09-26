@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
-import { Button, EmptyState, Notice, StatusPill } from "../../components/ui";
+import { Button, EmptyState, Label, Notice, StatusPill } from "../../components/ui";
+import { getCsrfToken } from "../../lib/api";
 
 type Finding = {
   id: string;
@@ -20,6 +21,7 @@ export function ReleaseWorkspacePage() {
   const [release, setRelease] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
 
   async function load() {
     const data = await api<{ release: Record<string, unknown>; findings: Finding[] }>(
@@ -70,6 +72,29 @@ export function ReleaseWorkspacePage() {
     }
   }
 
+  async function uploadEvidence(file: File) {
+    setError(null);
+    const body = new FormData();
+    body.append("file", file);
+    body.append("releaseId", releaseId ?? "");
+    try {
+      const headers: HeadersInit = {};
+      const csrf = getCsrfToken();
+      if (csrf) headers["X-CSRF-Token"] = csrf;
+      const res = await fetch(`/api/projects/${id}/artifacts`, {
+        method: "POST",
+        body,
+        credentials: "include",
+        headers,
+      });
+      const data = (await res.json()) as { id?: string; message?: string };
+      if (!res.ok) throw new Error(data.message || "Upload failed");
+      setUploadNote(`Evidence stored as ${data.id} (private R2). SVG/HTML uploads are blocked.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    }
+  }
+
   async function generateReport() {
     try {
       const res = await api<{ job: { result_json?: string } }>(
@@ -109,6 +134,13 @@ export function ReleaseWorkspacePage() {
         </div>
       </div>
       {note ? <Notice title="Update" tone="positive">{note}</Notice> : null}
+      {uploadNote ? (
+        <div className="mt-3">
+          <Notice title="Evidence uploaded" tone="positive">
+            {uploadNote}
+          </Notice>
+        </div>
+      ) : null}
       {error ? (
         <div className="mt-3">
           <Notice title="Error" tone="danger">
@@ -116,6 +148,18 @@ export function ReleaseWorkspacePage() {
           </Notice>
         </div>
       ) : null}
+      <div className="mt-6 rounded-[16px] border border-border bg-surface p-4">
+        <Label>Upload release evidence (image / text / JSON, max 2MB)</Label>
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,text/plain,application/json"
+          className="mt-2 block w-full text-sm"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void uploadEvidence(file);
+          }}
+        />
+      </div>
       <h3 className="mt-6 text-lg font-semibold">Findings</h3>
       {findings.length === 0 ? (
         <EmptyState
