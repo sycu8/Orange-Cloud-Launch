@@ -65,6 +65,7 @@ export function ReportDetailPage() {
   const label = useLabel();
   const [report, setReport] = useState<ReportRow | null>(null);
   const [sharePath, setSharePath] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +79,8 @@ export function ReportDetailPage() {
   async function share() {
     if (!id || !reportId) return;
     setCopied(false);
+    setSharing(true);
+    setError(null);
     try {
       const res = await api<{ path: string }>(
         `/api/projects/${id}/reports/${reportId}/shares`,
@@ -86,6 +89,8 @@ export function ReportDetailPage() {
       setSharePath(res.path);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -161,11 +166,25 @@ export function ReportDetailPage() {
               {t("reports.openRelease")}
             </Button>
           </Link>
-          <Button className="w-full sm:w-auto" onClick={() => void share()}>
-            {t("reports.createShare")}
+          <Button className="w-full sm:w-auto" disabled={sharing} onClick={() => void share()}>
+            {sharing ? t("reports.sharing") : t("reports.createShare")}
           </Button>
         </div>
       </div>
+
+      {shareUrl ? (
+        <div className="mt-4">
+          <Notice title={t("reports.shareCreated")} tone="positive">
+            <a className="break-all" href={sharePath ?? shareUrl}>
+              {shareUrl}
+            </a>
+            <p className="mt-2">{t("reports.shareRevocable")}</p>
+            <Button className="mt-3 w-full sm:w-auto" variant="secondary" onClick={() => void copyShare()}>
+              {copied ? t("reports.copied") : t("reports.copyLink")}
+            </Button>
+          </Notice>
+        </div>
+      ) : null}
 
       {versionCode || ruleset ? (
         <details className="mt-4 rounded-[12px] border border-border p-3">
@@ -322,19 +341,6 @@ export function ReportDetailPage() {
         </p>
       ) : null}
 
-      {shareUrl ? (
-        <div className="mt-6">
-          <Notice title={t("reports.shareCreated")} tone="positive">
-            <a className="break-all" href={sharePath ?? shareUrl}>
-              {shareUrl}
-            </a>
-            <p className="mt-2">{t("reports.shareRevocable")}</p>
-            <Button className="mt-3 w-full sm:w-auto" variant="secondary" onClick={() => void copyShare()}>
-              {copied ? t("reports.copied") : t("reports.copyLink")}
-            </Button>
-          </Notice>
-        </div>
-      ) : null}
       {error ? (
         <div className="mt-4">
           <Notice title={t("common.error")} tone="danger">
