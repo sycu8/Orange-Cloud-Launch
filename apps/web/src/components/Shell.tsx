@@ -48,9 +48,39 @@ export function MarketingShell() {
       </header>
       <Outlet />
       <footer className="border-t border-border bg-surface/50">
-        <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>{t("home.footer.by")}</p>
-          <p>{t("home.footer.tagline")}</p>
+        <div className="mx-auto max-w-6xl px-4 py-8">
+          <nav aria-label={t("home.footer.nav")} className="mb-4 flex flex-wrap gap-x-4 gap-y-1">
+            <a href="/#project" className="inline-flex min-h-[44px] items-center text-sm font-semibold">
+              {t("home.nav.project")}
+            </a>
+            <a href="/#how-it-works" className="inline-flex min-h-[44px] items-center text-sm font-semibold">
+              {t("home.nav.how")}
+            </a>
+            <a href="/#how-to" className="inline-flex min-h-[44px] items-center text-sm font-semibold">
+              {t("home.nav.howto")}
+            </a>
+            <a href="/#value" className="inline-flex min-h-[44px] items-center text-sm font-semibold">
+              {t("home.nav.value")}
+            </a>
+            <a href="/#where" className="inline-flex min-h-[44px] items-center text-sm font-semibold">
+              {t("home.nav.where")}
+            </a>
+            <a href="/#faq" className="inline-flex min-h-[44px] items-center text-sm font-semibold">
+              {t("home.nav.faq")}
+            </a>
+          </nav>
+          <div className="flex flex-col gap-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+            <p>{t("home.footer.by")}</p>
+            <p className="flex gap-4">
+              <a href="/?lang=en" hrefLang="en">
+                {t("lang.en")}
+              </a>
+              <a href="/?lang=vi" hrefLang="vi">
+                {t("lang.vi")}
+              </a>
+            </p>
+            <p>{t("home.footer.tagline")}</p>
+          </div>
         </div>
       </footer>
     </div>
