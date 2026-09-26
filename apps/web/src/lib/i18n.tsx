@@ -236,6 +236,8 @@ const en: Dict = {
     "No universal readiness score. Human task results first; deterministic fetch notes are not human outcomes.",
   "reports.humanOutcomes": "Human outcomes",
   "reports.sampleSize": "Sample size",
+  "reports.couldNotNote":
+    "could_not_complete is a successful critical review — praise is not required.",
   "reports.noCommunity": "No community reviews attached to this release yet.",
   "reports.reopened": "Reopened & not rechecked",
   "reports.reopenedNone":
@@ -549,6 +551,8 @@ const vi: Dict = {
     "Không có điểm sẵn sàng phổ quát. Kết quả nhiệm vụ của con người trước; ghi chú fetch xác định không phải kết quả từ con người.",
   "reports.humanOutcomes": "Kết quả từ con người",
   "reports.sampleSize": "Cỡ mẫu",
+  "reports.couldNotNote":
+    "Không hoàn thành được là một đánh giá phản biện thành công — không cần lời khen.",
   "reports.noCommunity": "Chưa có đánh giá cộng đồng gắn với bản phát hành này.",
   "reports.reopened": "Mở lại & chưa kiểm tra lại",
   "reports.reopenedNone":

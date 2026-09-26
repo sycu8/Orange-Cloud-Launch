@@ -94,6 +94,7 @@ export function ReportDetailPage() {
   const humanFindings = findings.filter((f) => f.provenance === "human_observation");
   const otherFindings = findings.filter((f) => f.provenance !== "human_observation");
   const outcomeEntries = Object.entries(summary.human_reviews?.outcome_counts ?? {});
+  const sampleSize = summary.human_reviews?.sample_size ?? 0;
 
   return (
     <div>
@@ -146,8 +147,10 @@ export function ReportDetailPage() {
 
       <h3 className="mt-8 text-lg font-semibold">{t("reports.humanOutcomes")}</h3>
       <p className="text-sm text-muted">
-        {t("reports.sampleSize")} {summary.human_reviews?.sample_size ?? 0}.{" "}
-        {summary.human_reviews?.note ?? "could_not_complete counts as useful critical feedback."}
+        {t("reports.sampleSize")} {sampleSize}.
+        {sampleSize > 0
+          ? ` ${summary.human_reviews?.note ?? t("reports.couldNotNote")}`
+          : null}
       </p>
       {outcomeEntries.length === 0 ? (
         <p className="mt-2 text-sm text-muted">{t("reports.noCommunity")}</p>
