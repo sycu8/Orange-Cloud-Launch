@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /signin
+Disallow: /review/
+
+Sitemap: https://launch.orangecloud.vn/sitemap.xml

@@ -24,6 +24,7 @@ import { artifactRoutes } from "./routes/artifacts.js";
 import { workspaceRoutes } from "./routes/workspace.js";
 import { relayOutbox } from "./jobs/outbox.js";
 import { runCleanup } from "./jobs/cleanup.js";
+import { isIndexableHost, robotsTxt, sitemapXml } from "./lib/seo.js";
 
 const app = new Hono<AppEnv>();
 
@@ -118,6 +119,48 @@ async function maintenanceAuthorized(c: Context<AppEnv>): Promise<boolean> {
 
 // Worker-rendered public pages (also under run_worker_first)
 app.route("/", publicRoutes);
+
+app.get("/robots.txt", (c) => {
+  const host = new URL(c.req.url).hostname;
+  return c.body(robotsTxt(host), 200, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "public, max-age=3600",
+  });
+});
+
+app.get("/sitemap.xml", (c) => {
+  const host = new URL(c.req.url).hostname;
+  if (!isIndexableHost(host)) {
+    return c.text("Not found", 404);
+  }
+  return c.body(sitemapXml(), 200, {
+    "Content-Type": "application/xml; charset=utf-8",
+    "Cache-Control": "public, max-age=3600",
+  });
+});
+
+app.get("/", async (c) => {
+  if (!c.env.ASSETS) {
+    return c.text("OCLaunch UI assets not built. Run npm run build -w @oclaunch/web", 503);
+  }
+  const assetUrl = new URL(c.req.url);
+  assetUrl.pathname = "/index.html";
+  assetUrl.search = "";
+  const assetResponse = await c.env.ASSETS.fetch(new Request(assetUrl.toString(), { method: "GET" }));
+  if (isIndexableHost(new URL(c.req.url).hostname)) {
+    return assetResponse;
+  }
+  const headers = new Headers(assetResponse.headers);
+  headers.set("X-Robots-Tag", "noindex, nofollow");
+  headers.set("Cache-Control", "no-store");
+  return new HTMLRewriter()
+    .on('meta[name="robots"]', {
+      element(element) {
+        element.setAttribute("content", "noindex, nofollow");
+      },
+    })
+    .transform(new Response(assetResponse.body, { status: assetResponse.status, headers }));
+});
 
 app.notFound(async (c) => {
   const path = new URL(c.req.url).pathname;

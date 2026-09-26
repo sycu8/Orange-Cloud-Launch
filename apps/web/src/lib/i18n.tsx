@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { homeEn, homeVi } from "./home-copy";
 
 export type Lang = "en" | "vi";
 
@@ -321,6 +322,7 @@ const en: Dict = {
   "changes.quickExport": "Quick export",
   "changes.baseShaError": "Paste a real base commit SHA (at least 7 characters).",
   "changes.exportReady": "Agent export ready — open the change studio to copy it.",
+  ...homeEn,
 };
 
 const vi: Dict = {
@@ -633,6 +635,7 @@ const vi: Dict = {
   "changes.quickExport": "Xuất nhanh",
   "changes.baseShaError": "Dán một base commit SHA thật (ít nhất 7 ký tự).",
   "changes.exportReady": "Xuất agent đã sẵn sàng — mở xưởng change để sao chép.",
+  ...homeVi,
 };
 
 const catalogs: Record<Lang, Dict> = { en, vi };
@@ -655,9 +658,28 @@ function readStoredLang(): Lang {
   return "en";
 }
 
+function readInitialLang(): Lang {
+  if (typeof window === "undefined") return "en";
+  const q = new URLSearchParams(window.location.search).get("lang");
+  if (q === "vi" || q === "en") return q;
+  return readStoredLang();
+}
+
+function writeLangInUrl(lang: Lang) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("lang", lang);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
-    const initial = typeof window === "undefined" ? "en" : readStoredLang();
+    const initial = readInitialLang();
+    try {
+      localStorage.setItem(STORAGE_KEY, initial);
+    } catch {
+      /* ignore */
+    }
     if (typeof document !== "undefined") {
       document.documentElement.lang = initial === "vi" ? "vi" : "en";
     }
@@ -674,6 +696,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     if (typeof document !== "undefined") {
       document.documentElement.lang = next === "vi" ? "vi" : "en";
     }
+    writeLangInUrl(next);
   }, []);
 
   const t = useCallback(
