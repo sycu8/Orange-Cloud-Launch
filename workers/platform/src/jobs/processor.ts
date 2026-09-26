@@ -452,7 +452,10 @@ async function handleReport(
         outcome: (r as { outcome: string }).outcome,
         audience_fit: (r as { audience_fit: string }).audience_fit,
       })),
-      note: "could_not_complete is a successful critical review — praise is not required.",
+      note:
+        (reviews.results?.length ?? 0) > 0
+          ? "could_not_complete is a successful critical review — praise is not required."
+          : null,
     },
     reopened_findings: reopened,
     verified_not_rechecked: verifiedNotRechecked.map((f) => ({
