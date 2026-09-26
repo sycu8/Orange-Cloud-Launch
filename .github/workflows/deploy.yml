@@ -18,10 +18,10 @@ on:
         type: string
         required: false
   # workflow_dispatch is preferred. This push path exists because the
-  # integration token cannot call the Actions dispatch API. A push only
-  # deploys staging. A commit message that contains "Create the production Worker"
-  # also publishes the production Worker on workers.dev, without attaching
-  # launch.orangecloud.vn. Staging deploy applies remote D1 migrations
+  # integration token cannot call the Actions dispatch API. A push deploys
+  # staging. Commit messages containing "Create the production Worker" or
+  # "Attach production custom domain" also deploy production (custom domain
+  # launch.orangecloud.vn). Staging deploy applies remote D1 migrations
   # before publishing (including 0003_browser_observation.sql).
   # Browser Run (ENABLE_BROWSER_RUN) ships on by default with the BROWSER binding.
   push:
@@ -48,9 +48,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Normal pushes deploy staging. A commit that creates the production Worker
-        # also publishes oclaunch-platform-production once. Dispatch still selects one env.
-        environment: ${{ fromJSON(github.event_name == 'push' && contains(github.event.head_commit.message, 'Create the production Worker') && '["staging","production"]' || github.event_name == 'push' && '["staging"]' || inputs.environment == 'production' && '["production"]' || '["staging"]') }}
+        # Normal pushes deploy staging. Specific commit messages also deploy production.
+        # Dispatch still selects one env.
+        environment: ${{ fromJSON(github.event_name == 'push' && (contains(github.event.head_commit.message, 'Create the production Worker') || contains(github.event.head_commit.message, 'Attach production custom domain')) && '["staging","production"]' || github.event_name == 'push' && '["staging"]' || inputs.environment == 'production' && '["production"]' || '["staging"]') }}
     env:
       WRANGLER_ENV: ${{ matrix.environment }}
     steps:
