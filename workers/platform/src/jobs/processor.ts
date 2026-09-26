@@ -452,7 +452,10 @@ async function handleReport(
         outcome: (r as { outcome: string }).outcome,
         audience_fit: (r as { audience_fit: string }).audience_fit,
       })),
-      note: "If someone could not finish, that still counts. You do not need praise.",
+      note:
+        (reviews.results?.length ?? 0) > 0
+          ? "If someone could not finish, that still counts. You do not need praise."
+          : null,
     },
     reopened_findings: reopened,
     verified_not_rechecked: verifiedNotRechecked.map((f) => ({

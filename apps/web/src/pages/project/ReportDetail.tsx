@@ -18,7 +18,7 @@ type ReportSummary = {
   human_reviews?: {
     sample_size: number;
     outcome_counts?: Record<string, number>;
-    note?: string;
+    note?: string | null;
   };
   counts_by_state?: Record<string, number>;
   counts_by_provenance?: Record<string, number>;
@@ -226,7 +226,8 @@ export function ReportDetailPage() {
 
       <h3 className="mt-8 text-lg font-semibold">{t("reports.humanOutcomes")}</h3>
       <p className="text-sm text-muted">
-        {t("reports.sampleSize")}: {sampleSize}. {t("reports.sampleNote")}
+        {t("reports.sampleSize")}: {sampleSize}.
+        {sampleSize > 0 ? ` ${t("reports.sampleNote")}` : null}
       </p>
       {outcomeEntries.length === 0 ? (
         <p className="mt-2 text-sm text-muted">{t("reports.noCommunity")}</p>
