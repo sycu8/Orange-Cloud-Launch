@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
-import { EmptyState, PageHeader, StatusPill } from "../components/ui";
+import { useAuth } from "../lib/auth";
+import { Button, EmptyState, PageHeader, StatusPill } from "../components/ui";
 
 type DiscoverProject = {
   slug: string;
@@ -15,6 +16,7 @@ type DiscoverProject = {
 };
 
 export function DiscoverPage() {
+  const { me } = useAuth();
   const [projects, setProjects] = useState<DiscoverProject[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +31,13 @@ export function DiscoverPage() {
       <PageHeader
         title="Discover review requests"
         subtitle="Opt-in public projects only. Visibility defaults to private."
+        actions={
+          <Link to={me ? "/app/inbox" : "/signin"} className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto">
+              {me ? "Open review inbox" : "Sign in to review"}
+            </Button>
+          </Link>
+        }
       />
       {error ? <p className="text-[#9B1C1C]">{error}</p> : null}
       {!error && projects.length === 0 ? (

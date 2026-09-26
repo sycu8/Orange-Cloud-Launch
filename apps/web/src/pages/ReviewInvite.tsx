@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { PinEvidence, type ReviewPin } from "../components/PinEvidence";
 import { Button, Label, Notice, TextArea, PageHeader } from "../components/ui";
 
 export function ReviewInvitePage() {
@@ -10,6 +11,7 @@ export function ReviewInvitePage() {
   const [mission, setMission] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [pins, setPins] = useState<ReviewPin[]>([]);
   const [form, setForm] = useState({
     audienceFit: "target_user",
     outcome: "could_not_complete",
@@ -30,7 +32,7 @@ export function ReviewInvitePage() {
     try {
       await api(`/api/invite/${token}/reviews`, {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, pins }),
       });
       setDone(true);
     } catch (err) {
@@ -111,6 +113,11 @@ export function ReviewInvitePage() {
               onChange={(e) => setForm((f) => ({ ...f, observations: e.target.value }))}
             />
           </div>
+          <PinEvidence
+            uploadUrl={`/api/invite/${token}/evidence`}
+            pins={pins}
+            onChange={setPins}
+          />
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label>Audience fit</Label>

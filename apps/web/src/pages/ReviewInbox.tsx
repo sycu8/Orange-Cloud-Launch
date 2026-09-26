@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { PinEvidence, type ReviewPin } from "../components/PinEvidence";
 import { Button, EmptyState, Input, Label, Notice, PageHeader, TextArea } from "../components/ui";
 
 type InboxMission = {
@@ -23,6 +24,7 @@ export function ReviewInboxPage() {
   const [active, setActive] = useState<InboxMission | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [pins, setPins] = useState<ReviewPin[]>([]);
   const [form, setForm] = useState({
     audienceFit: "peer",
     outcome: "could_not_complete",
@@ -52,10 +54,11 @@ export function ReviewInboxPage() {
     try {
       await api(`/api/missions/${active.missionId}/reviews`, {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, pins }),
       });
       setDone(active.missionId);
       setActive(null);
+      setPins([]);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Submit failed");
@@ -112,7 +115,13 @@ export function ReviewInboxPage() {
                       Open app
                     </Button>
                   </a>
-                  <Button className="w-full sm:w-auto" onClick={() => setActive(m)}>
+                  <Button
+                    className="w-full sm:w-auto"
+                    onClick={() => {
+                      setActive(m);
+                      setPins([]);
+                    }}
+                  >
                     Submit review
                   </Button>
                 </div>
@@ -159,6 +168,11 @@ export function ReviewInboxPage() {
               onChange={(e) => setForm((f) => ({ ...f, observations: e.target.value }))}
             />
           </div>
+          <PinEvidence
+            uploadUrl={`/api/missions/${active.missionId}/evidence`}
+            pins={pins}
+            onChange={setPins}
+          />
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label>Audience fit</Label>

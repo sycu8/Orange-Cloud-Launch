@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { Button, EmptyState, Label, Notice, StatusPill } from "../../components/ui";
 import { getCsrfToken } from "../../lib/api";
@@ -17,6 +17,7 @@ type Finding = {
 
 export function ReleaseWorkspacePage() {
   const { id, releaseId } = useParams();
+  const navigate = useNavigate();
   const [findings, setFindings] = useState<Finding[]>([]);
   const [release, setRelease] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function ReleaseWorkspacePage() {
         : null;
       if (parsed?.reportId) {
         setNote(`Report ${parsed.reportId} created`);
+        navigate(`/app/projects/${id}/reports/${parsed.reportId}`);
       } else {
         setNote("Report job finished");
       }
@@ -193,6 +195,11 @@ export function ReleaseWorkspacePage() {
                 <Button variant="ghost" onClick={() => void triage(f, "dismissed")}>
                   Dismiss
                 </Button>
+                {(f.state === "accepted" || f.state === "change_proposed") && (
+                  <Button variant="secondary" onClick={() => void triage(f, "implemented")}>
+                    Mark implemented
+                  </Button>
+                )}
                 {(f.state === "implemented" ||
                   f.state === "accepted" ||
                   f.state === "verification_pending" ||
@@ -201,6 +208,11 @@ export function ReleaseWorkspacePage() {
                     Mark verified
                   </Button>
                 )}
+                {f.state === "accepted" ? (
+                  <Link to={`/app/projects/${id}/changes`}>
+                    <Button variant="ghost">Propose change</Button>
+                  </Link>
+                ) : null}
               </div>
             </li>
           ))}

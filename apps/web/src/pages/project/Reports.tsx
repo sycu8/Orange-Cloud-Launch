@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useOutletContext, useParams } from "react-router-dom";
+import { Link, useOutletContext, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { Button, EmptyState, Notice } from "../../components/ui";
 import type { ProjectDetail } from "./ProjectLayout";
@@ -105,9 +105,14 @@ export function ReportsPage() {
               <p className="text-sm text-muted">
                 Release {r.release_id} · {r.created_at}
               </p>
-              <Button className="mt-3" variant="secondary" onClick={() => void share(r.id)}>
-                Create redacted share link
-              </Button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link to={`/app/projects/${id}/reports/${r.id}`}>
+                  <Button>Open report</Button>
+                </Link>
+                <Button variant="secondary" onClick={() => void share(r.id)}>
+                  Create redacted share link
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

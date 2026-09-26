@@ -5,6 +5,39 @@ import { jsonErr, jsonOk, nowIso } from "../lib/http.js";
 import { newId, randomToken, sha256Hex } from "../lib/ids.js";
 import { audit, requireMember } from "../db/access.js";
 
+const MAX_EVIDENCE_BYTES = 2_000_000;
+
+async function storeReviewEvidence(
+  c: Context<AppEnv>,
+  projectId: string,
+  releaseId: string,
+  file: File,
+) {
+  if (file.size > MAX_EVIDENCE_BYTES) {
+    return { error: jsonErr(c, "VALIDATION", "File exceeds 2MB upload cap", 400) };
+  }
+  const mime = file.type || "application/octet-stream";
+  if (!mime.startsWith("image/") || mime.includes("svg")) {
+    return {
+      error: jsonErr(c, "VALIDATION", "Pin evidence must be a PNG, JPEG, or WebP image", 400),
+    };
+  }
+  const buf = await file.arrayBuffer();
+  const hash = await sha256Hex(buf);
+  const id = newId("art");
+  const key = `projects/${projectId}/releases/${releaseId}/pins/${id}`;
+  await c.env.ARTIFACTS.put(key, buf, {
+    httpMetadata: { contentType: mime },
+  });
+  await c.env.DB.prepare(
+    `INSERT INTO artifacts (id, project_id, release_id, r2_key, sha256, mime_type, size_bytes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(id, projectId, releaseId, key, hash, mime, file.size, nowIso())
+    .run();
+  return { id, mimeType: mime, sizeBytes: file.size };
+}
+
 export const missionRoutes = new Hono<AppEnv>();
 
 missionRoutes.get("/projects/:projectId/missions", async (c) => {
@@ -189,6 +222,10 @@ async function submitReviewForMission(
         pin.viewportWidth,
         pin.viewportHeight,
       ),
+      c.env.DB.prepare(
+        `INSERT OR IGNORE INTO finding_evidence (project_id, finding_id, artifact_id)
+         VALUES (?, ?, ?)`,
+      ).bind(mission.project_id, findingId, pin.artifactId),
     );
   }
 
@@ -204,6 +241,37 @@ async function submitReviewForMission(
   await audit(c, "review.submit", "review", reviewId, mission.project_id);
   return jsonOk(c, { reviewId, findingId }, 201);
 }
+
+missionRoutes.post("/invite/:token/evidence", async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return jsonErr(c, "UNAUTHENTICATED", "Sign in to upload evidence", 401);
+  const token = c.req.param("token");
+  const hash = await sha256Hex(token);
+  const mission = await c.env.DB.prepare(
+    `SELECT m.id, m.project_id, m.release_id, p.owner_id FROM missions m
+     JOIN projects p ON p.id = m.project_id
+     WHERE m.invite_token_hash = ? AND m.state = 'open'`,
+  )
+    .bind(hash)
+    .first<{
+      id: string;
+      project_id: string;
+      release_id: string;
+      owner_id: string;
+    }>();
+  if (!mission) return jsonErr(c, "NOT_FOUND", "Invite expired or unknown", 404);
+  if (mission.owner_id === userId) {
+    return jsonErr(c, "FORBIDDEN", "Self-review evidence is not allowed", 403);
+  }
+  const form = await c.req.formData();
+  const file = form.get("file");
+  if (!file || typeof file === "string" || !("arrayBuffer" in file)) {
+    return jsonErr(c, "VALIDATION", "file is required", 400);
+  }
+  const stored = await storeReviewEvidence(c, mission.project_id, mission.release_id, file as File);
+  if ("error" in stored && stored.error) return stored.error;
+  return jsonOk(c, stored, 201);
+});
 
 missionRoutes.post("/invite/:token/reviews", async (c) => {
   const userId = c.get("userId");
@@ -224,6 +292,44 @@ missionRoutes.post("/invite/:token/reviews", async (c) => {
     }>();
   if (!mission) return jsonErr(c, "NOT_FOUND", "Invite expired or unknown", 404);
   return submitReviewForMission(c, mission, userId);
+});
+
+missionRoutes.post("/missions/:missionId/evidence", async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return jsonErr(c, "UNAUTHENTICATED", "Sign in to upload evidence", 401);
+  const missionId = c.req.param("missionId");
+  const mission = await c.env.DB.prepare(
+    `SELECT m.id, m.project_id, m.release_id, m.state, p.owner_id, p.visibility
+     FROM missions m
+     JOIN projects p ON p.id = m.project_id
+     WHERE m.id = ?`,
+  )
+    .bind(missionId)
+    .first<{
+      id: string;
+      project_id: string;
+      release_id: string;
+      state: string;
+      owner_id: string;
+      visibility: string;
+    }>();
+  if (!mission || mission.state !== "open") {
+    return jsonErr(c, "NOT_FOUND", "Mission not open", 404);
+  }
+  if (mission.visibility === "private") {
+    return jsonErr(c, "FORBIDDEN", "Private missions require an invite link", 403);
+  }
+  if (mission.owner_id === userId) {
+    return jsonErr(c, "FORBIDDEN", "Self-review evidence is not allowed", 403);
+  }
+  const form = await c.req.formData();
+  const file = form.get("file");
+  if (!file || typeof file === "string" || !("arrayBuffer" in file)) {
+    return jsonErr(c, "VALIDATION", "file is required", 400);
+  }
+  const stored = await storeReviewEvidence(c, mission.project_id, mission.release_id, file as File);
+  if ("error" in stored && stored.error) return stored.error;
+  return jsonOk(c, stored, 201);
 });
 
 /** Public/unlisted open missions can be reviewed from the inbox without the opaque invite token. */

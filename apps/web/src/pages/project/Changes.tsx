@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { Button, EmptyState, Input, Label, Notice } from "../../components/ui";
 
@@ -16,6 +16,7 @@ type Finding = { id: string; title: string; state: string; release_id: string };
 
 export function ChangesPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [changeSets, setChangeSets] = useState<ChangeSet[]>([]);
   const [accepted, setAccepted] = useState<Finding[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -73,6 +74,7 @@ export function ChangesPage() {
       setMessage(`Change set ${res.id} proposed`);
       setSelected([]);
       await load();
+      navigate(`/app/projects/${id}/changes/${res.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     }
@@ -190,6 +192,9 @@ export function ChangesPage() {
                   {cs.state} · base {cs.base_sha}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <Link to={`/app/projects/${id}/changes/${cs.id}`}>
+                    <Button>Open change studio</Button>
+                  </Link>
                   <Button variant="secondary" onClick={() => void exportBundle(cs.id)}>
                     Export for coding agent
                   </Button>

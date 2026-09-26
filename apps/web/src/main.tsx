@@ -18,7 +18,9 @@ import { ReleaseWorkspacePage } from "./pages/project/ReleaseWorkspace";
 import { MissionsPage } from "./pages/project/Missions";
 import { BrandPage } from "./pages/project/Brand";
 import { ChangesPage } from "./pages/project/Changes";
+import { ChangeDetailPage } from "./pages/project/ChangeDetail";
 import { ReportsPage } from "./pages/project/Reports";
+import { ReportDetailPage } from "./pages/project/ReportDetail";
 import { DomainsPage } from "./pages/project/Domains";
 import "./styles/app.css";
 
@@ -45,7 +47,9 @@ createRoot(document.getElementById("root")!).render(
               <Route path="missions" element={<MissionsPage />} />
               <Route path="brand" element={<BrandPage />} />
               <Route path="changes" element={<ChangesPage />} />
+              <Route path="changes/:changeId" element={<ChangeDetailPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="reports/:reportId" element={<ReportDetailPage />} />
               <Route path="domains" element={<DomainsPage />} />
               <Route path="releases/:releaseId" element={<ReleaseWorkspacePage />} />
             </Route>

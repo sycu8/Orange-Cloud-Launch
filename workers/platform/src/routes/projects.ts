@@ -96,7 +96,34 @@ projectRoutes.get("/projects/:id", async (c) => {
   )
     .bind(id)
     .all();
-  return jsonOk(c, { project, role, releases: releases.results ?? [] });
+  const loop = await c.env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM missions WHERE project_id = ? AND state = 'open') as open_missions,
+       (SELECT COUNT(*) FROM findings WHERE project_id = ? AND state IN ('observed','triaged','needs_evidence','reopened')) as open_findings,
+       (SELECT COUNT(*) FROM findings WHERE project_id = ? AND state = 'accepted') as accepted_findings,
+       (SELECT COUNT(*) FROM findings WHERE project_id = ? AND state IN ('change_proposed','implemented','verification_pending')) as in_progress_findings,
+       (SELECT COUNT(*) FROM findings WHERE project_id = ? AND state = 'verified') as verified_findings,
+       (SELECT COUNT(*) FROM change_sets WHERE project_id = ?) as change_sets,
+       (SELECT COUNT(*) FROM change_sets WHERE project_id = ? AND state = 'implemented') as implemented_changes,
+       (SELECT COUNT(*) FROM reports WHERE project_id = ?) as reports`,
+  )
+    .bind(id, id, id, id, id, id, id, id)
+    .first<Record<string, number>>();
+  return jsonOk(c, {
+    project,
+    role,
+    releases: releases.results ?? [],
+    loop: loop ?? {
+      open_missions: 0,
+      open_findings: 0,
+      accepted_findings: 0,
+      in_progress_findings: 0,
+      verified_findings: 0,
+      change_sets: 0,
+      implemented_changes: 0,
+      reports: 0,
+    },
+  });
 });
 
 projectRoutes.patch("/projects/:id", async (c) => {

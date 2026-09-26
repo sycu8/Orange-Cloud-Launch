@@ -23,6 +23,16 @@ export type ProjectDetail = {
     commit_sha: string | null;
     captured_at: string;
   }>;
+  loop?: {
+    open_missions: number;
+    open_findings: number;
+    accepted_findings: number;
+    in_progress_findings: number;
+    verified_findings: number;
+    change_sets: number;
+    implemented_changes: number;
+    reports: number;
+  };
 };
 
 export function ProjectLayout() {
