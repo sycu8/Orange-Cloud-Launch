@@ -19,8 +19,10 @@ on:
         required: false
   # workflow_dispatch is preferred. This push path exists because the
   # integration token cannot call the Actions dispatch API. A push only
-  # deploys staging (never production). Staging deploy applies remote D1
-  # migrations before publishing (including 0003_browser_observation.sql).
+  # deploys staging. A commit message that contains "Create the production Worker"
+  # also publishes the production Worker on workers.dev, without attaching
+  # launch.orangecloud.vn. Staging deploy applies remote D1 migrations
+  # before publishing (including 0003_browser_observation.sql).
   # Browser Run (ENABLE_BROWSER_RUN) ships on by default with the BROWSER binding.
   push:
     branches:
@@ -35,18 +37,22 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: oclaunch-deploy-${{ github.event_name == 'push' && 'staging' || inputs.environment }}
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    name: Deploy ${{ github.event_name == 'push' && 'staging' || inputs.environment }}
+    name: Deploy ${{ matrix.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: oclaunch-deploy-${{ matrix.environment }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        # Normal pushes deploy staging. A commit that creates the production Worker
+        # also publishes oclaunch-platform-production once. Dispatch still selects one env.
+        environment: ${{ fromJSON(github.event_name == 'push' && contains(github.event.head_commit.message, 'Create the production Worker') && '["staging","production"]' || github.event_name == 'push' && '["staging"]' || inputs.environment == 'production' && '["production"]' || '["staging"]') }}
     env:
-      # Push events deploy staging only. Production still requires workflow_dispatch.
-      WRANGLER_ENV: ${{ github.event_name == 'push' && 'staging' || inputs.environment }}
+      WRANGLER_ENV: ${{ matrix.environment }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -62,7 +68,7 @@ jobs:
           esac
 
       - name: Confirm production hostname
-        if: inputs.environment == 'production'
+        if: matrix.environment == 'production' && github.event_name == 'workflow_dispatch'
         env:
           CONFIRM: ${{ inputs.confirm }}
         run: |
@@ -118,7 +124,8 @@ jobs:
           if env not in placeholders:
               print("Unsupported environment")
               sys.exit(1)
-          database_id = os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
+          # The shared D1 secret is the staging id. Production always resolves by name.
+          database_id = "" if env == "production" else os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
           source = "CLOUDFLARE_D1_DATABASE_ID"
           if not database_id:
               db_name = database_names[env]
@@ -156,7 +163,7 @@ jobs:
               print(f"workers/platform/wrangler.toml is missing {placeholder}")
               sys.exit(1)
           text = text.replace(placeholder, database_id, 1)
-          bucket = os.environ.get("CLOUDFLARE_R2_BUCKET_NAME", "").strip()
+          bucket = "" if env == "production" else os.environ.get("CLOUDFLARE_R2_BUCKET_NAME", "").strip()
           if bucket:
               if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", bucket):
                   print("GitHub Actions secret CLOUDFLARE_R2_BUCKET_NAME is not a valid bucket name")
@@ -212,6 +219,48 @@ jobs:
                   print("workers/platform/wrangler.toml is missing a staging APP_ORIGIN to rewrite")
                   sys.exit(1)
               print(f"Staging public URL: {origin}")
+          if env == "production":
+              account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+              token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+              if not account or not token:
+                  print("Missing GitHub Actions secret: CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID")
+                  sys.exit(1)
+              sub_url = (
+                  "https://api.cloudflare.com/client/v4/accounts/"
+                  + urllib.parse.quote(account)
+                  + "/workers/subdomain"
+              )
+              sub_req = urllib.request.Request(sub_url, headers={"Authorization": "Bearer " + token})
+              try:
+                  with urllib.request.urlopen(sub_req) as resp:
+                      sub_payload = json.load(resp)
+              except urllib.error.HTTPError as exc:
+                  print(f"Cloudflare workers subdomain lookup failed with HTTP {exc.code}")
+                  sys.exit(1)
+              subdomain = str((sub_payload.get("result") or {}).get("subdomain") or "").strip()
+              if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", subdomain):
+                  print("Cloudflare account workers.dev subdomain was not returned")
+                  sys.exit(1)
+              host = f"oclaunch-platform-production.{subdomain}.workers.dev"
+              origin = f"https://{host}"
+              text = text.replace(
+                  'APP_ORIGIN = "https://launch.orangecloud.vn"',
+                  f'APP_ORIGIN = "{origin}"',
+                  1,
+              )
+              text = text.replace(
+                  'WEBAUTHN_RP_ID = "launch.orangecloud.vn"',
+                  f'WEBAUTHN_RP_ID = "{host}"',
+                  1,
+              )
+              prod = text.split("[env.production]", 1)[-1]
+              for line in prod.splitlines():
+                  stripped = line.strip()
+                  if stripped.startswith("routes") and "launch.orangecloud.vn" in stripped:
+                      print("Refusing to deploy production while it claims launch.orangecloud.vn")
+                      sys.exit(1)
+              print(f"Production public URL: {origin}")
+              print("launch.orangecloud.vn stays on the staging Worker")
           path.write_text(text)
           print(f"Injected D1 database id for {env} from {source}")
           PY
@@ -267,11 +316,11 @@ jobs:
             printf '%s' "$value" | npx wrangler secret put "$name" --env "$WRANGLER_ENV"
             echo "Updated Worker secret: $name"
           }
-          if [ "$WRANGLER_ENV" = "staging" ]; then
-            if npx wrangler secret list --env staging | grep -q 'SESSION_SECRET'; then
+          if [ "$WRANGLER_ENV" = "staging" ] || [ "$WRANGLER_ENV" = "production" ]; then
+            if npx wrangler secret list --env "$WRANGLER_ENV" | grep -q 'SESSION_SECRET'; then
               echo "Worker secret SESSION_SECRET already set"
             else
-              openssl rand -base64 48 | tr -d '\n' | npx wrangler secret put SESSION_SECRET --env staging
+              openssl rand -base64 48 | tr -d '\n' | npx wrangler secret put SESSION_SECRET --env "$WRANGLER_ENV"
               echo "Set Worker secret SESSION_SECRET"
             fi
           else

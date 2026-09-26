@@ -27,12 +27,12 @@ Attach only an approved staging hostname (e.g. `launch-staging.orangecloud.vn`) 
 
 ## Production
 
+The production Worker is `oclaunch-platform-production` on `workers.dev`. `launch.orangecloud.vn` stays on the staging Worker until that route is detached and then attached here.
+
 ```bash
 npx wrangler d1 migrations apply oclaunch-production --env production
 npx wrangler deploy --env production
 ```
-
-Production route in config: exact Custom Domain `launch.orangecloud.vn` (no zone-wide wildcard).
 
 ## Feature flags
 
