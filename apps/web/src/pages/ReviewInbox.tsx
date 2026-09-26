@@ -13,7 +13,6 @@ type InboxMission = {
   projectName: string;
   slug: string;
   audience: string;
-  sourceUrl: string;
   releaseLabel: string;
   passportPath: string;
   topicTags: string[];
@@ -109,11 +108,11 @@ export function ReviewInboxPage() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:items-end">
-                  <a href={m.sourceUrl} target="_blank" rel="noreferrer">
+                  <Link to={m.passportPath}>
                     <Button variant="secondary" className="w-full sm:w-auto">
                       {t("inbox.openApp")}
                     </Button>
-                  </a>
+                  </Link>
                   <Button
                     className="w-full sm:w-auto"
                     onClick={() => {

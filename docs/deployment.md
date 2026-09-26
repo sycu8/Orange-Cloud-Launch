@@ -38,7 +38,9 @@ Production route in config: exact Custom Domain `launch.orangecloud.vn` (no zone
 
 | Var | Default | Meaning |
 |-----|---------|---------|
-| `DEV_AUTH_BYPASS` | `false` in staging/prod | Must stay false in production |
+| `DEV_LOGIN_SECRET` | unset | Local loopback login only. Do not set this on staging or production |
+| `MAINTENANCE_SECRET` | unset | Required header for maintenance HTTP routes. Cron does not use it |
+| `SESSION_SECRET` | secret | Pepper for recovery codes. Required before passkey registration |
 | `ENABLE_PATCH_PR` | `false` | Draft PR / sandbox path |
 | `ENABLE_PROJECT_DOMAINS` | `false` | Gateway activation |
 | `ENABLE_BROWSER_RUN` | `false` | Browser Rendering |
@@ -54,5 +56,6 @@ Production route in config: exact Custom Domain `launch.orangecloud.vn` (no zone
 
 - 3 projects / account
 - 2 automated reviews / project / month
+- 20 MB of uploaded evidence / project / month
 - Human reviews remain available when automated quota is exhausted
 - 48h preview TTL and 10-minute build timeout when sandbox is enabled

@@ -17,6 +17,19 @@ export async function runCleanup(env: { DB: D1Database }): Promise<{
   )
     .bind(now, now)
     .run();
+  const staleUsers = new Date(Date.now() - 60 * 60_000).toISOString();
+  await env.DB.prepare(
+    `DELETE FROM users WHERE id IN (
+      SELECT u.id FROM users u
+      WHERE u.id != 'user_local_founder'
+        AND u.created_at < ?
+        AND NOT EXISTS (SELECT 1 FROM credentials c WHERE c.user_id = u.id)
+        AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id)
+        AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.owner_id = u.id)
+    )`,
+  )
+    .bind(staleUsers)
+    .run();
   const domains = await env.DB.prepare(
     `UPDATE domains SET state = 'suspended'
      WHERE state = 'ownership_pending' AND challenge_expires_at IS NOT NULL AND challenge_expires_at < ?`,

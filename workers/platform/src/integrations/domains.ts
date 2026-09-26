@@ -1,4 +1,5 @@
 import { RESERVED_SLUGS } from "@oclaunch/shared";
+import { hostClass } from "../lib/fetch-guard.js";
 import { randomToken, sha256Hex } from "../lib/ids.js";
 
 export function isReservedHostname(hostname: string): boolean {
@@ -13,22 +14,25 @@ export function isBlockedUpstream(upstreamUrl: string): { ok: true } | { ok: fal
   } catch {
     return { ok: false, reason: "Invalid upstream URL" };
   }
-  if (url.protocol !== "https:" && url.hostname !== "localhost") {
-    return { ok: false, reason: "Upstream must be https (or localhost for lab tests)" };
-  }
   if (url.username || url.password) {
     return { ok: false, reason: "Upstream must not include userinfo" };
   }
-  if (url.port && url.port !== "443" && url.port !== "80") {
+  if (url.protocol !== "https:") {
+    return { ok: false, reason: "Upstream must be https" };
+  }
+  if (url.port && url.port !== "443") {
     return { ok: false, reason: "Alternate ports are not supported in MVP gateway" };
   }
   const host = url.hostname.toLowerCase();
   if (host === "launch.orangecloud.vn" || host.endsWith(".launch.orangecloud.vn")) {
     return { ok: false, reason: "Upstream cannot point at the OCLaunch platform" };
   }
-  if (host.endsWith(".orangecloud.vn") && host !== "orangecloud.vn") {
-    // Prevent alias-to-alias loops for sibling project hosts
+  if (host.endsWith(".orangecloud.vn")) {
     return { ok: false, reason: "Upstream cannot be another orangecloud.vn project alias" };
+  }
+  const kind = hostClass(url.hostname);
+  if (kind !== "name" && kind !== "public-ip") {
+    return { ok: false, reason: "Upstream host is not allowed" };
   }
   return { ok: true };
 }

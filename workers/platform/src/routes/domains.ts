@@ -9,6 +9,8 @@ import {
   isBlockedUpstream,
   isReservedHostname,
 } from "../integrations/domains.js";
+import { assessOutboundUrl } from "../lib/fetch-guard.js";
+import { timingSafeEqual } from "../lib/secret.js";
 
 export const domainRoutes = new Hono<AppEnv>();
 
@@ -28,6 +30,11 @@ domainRoutes.get("/projects/:projectId/domains", async (c) => {
 });
 
 domainRoutes.post("/projects/:projectId/domains", async (c) => {
+  if (c.env.ENABLE_PROJECT_DOMAINS !== "true") {
+    return jsonErr(c, "INTEGRATION_NOT_CONFIGURED", "Project domains are not enabled", 503, {
+      nextAction: "Turn on ENABLE_PROJECT_DOMAINS only with an approved DNS plan",
+    });
+  }
   const projectId = c.req.param("projectId");
   const role = await requireMember(c, projectId, ["owner"]);
   if (!role) return jsonErr(c, "FORBIDDEN", "Owner access required", 403);
@@ -40,6 +47,10 @@ domainRoutes.post("/projects/:projectId/domains", async (c) => {
   }
   const upstream = isBlockedUpstream(parsed.data.upstreamUrl);
   if (!upstream.ok) return jsonErr(c, "VALIDATION", upstream.reason, 400);
+  const resolved = await assessOutboundUrl(parsed.data.upstreamUrl, { allowLoopback: false });
+  if (!resolved.ok) {
+    return jsonErr(c, "VALIDATION", "Upstream host is not allowed", 400);
+  }
 
   const challenge = await createChallenge();
   const id = newId("dom");
@@ -90,6 +101,11 @@ domainRoutes.post("/projects/:projectId/domains", async (c) => {
 });
 
 domainRoutes.post("/projects/:projectId/domains/:domainId/verify", async (c) => {
+  if (c.env.ENABLE_PROJECT_DOMAINS !== "true") {
+    return jsonErr(c, "INTEGRATION_NOT_CONFIGURED", "Project domains are not enabled", 503, {
+      nextAction: "Turn on ENABLE_PROJECT_DOMAINS only with an approved DNS plan",
+    });
+  }
   const projectId = c.req.param("projectId");
   const domainId = c.req.param("domainId");
   const role = await requireMember(c, projectId, ["owner"]);
@@ -99,7 +115,7 @@ domainRoutes.post("/projects/:projectId/domains/:domainId/verify", async (c) => 
   )
     .bind(projectId, domainId)
     .first<{
-      upstream_url: string;
+      hostname: string;
       challenge_nonce: string | null;
       challenge_expires_at: string | null;
       state: string;
@@ -116,34 +132,34 @@ domainRoutes.post("/projects/:projectId/domains/:domainId/verify", async (c) => 
       nextAction: "Request a new domain claim",
     });
   }
-  const checkUrl = new URL("/.well-known/oclaunch-verification", domain.upstream_url);
+  const checkUrl = `https://${domain.hostname}/.well-known/oclaunch-verification`;
+  const decided = await assessOutboundUrl(checkUrl, { allowLoopback: false });
+  if (!decided.ok) {
+    return jsonErr(c, "OWNERSHIP_UNVERIFIED", "Ownership could not be verified.", 400);
+  }
+  const again = await assessOutboundUrl(checkUrl, { allowLoopback: false });
+  if (!again.ok) {
+    return jsonErr(c, "OWNERSHIP_UNVERIFIED", "Ownership could not be verified.", 400);
+  }
   try {
-    const res = await fetch(checkUrl.toString(), {
+    const res = await fetch(again.url.toString(), {
       method: "GET",
       redirect: "manual",
       signal: AbortSignal.timeout(8000),
       headers: { "User-Agent": "OCLaunch-DomainVerify/1.0" },
     });
-    const body = (await res.text()).trim();
-    if (res.status >= 400 || body !== domain.challenge_nonce) {
-      return jsonErr(
-        c,
-        "OWNERSHIP_UNVERIFIED",
-        `Upstream did not serve the expected nonce (HTTP ${res.status}).`,
-        400,
-        {
-          nextAction: `Publish the nonce at ${checkUrl.pathname} on the upstream origin`,
-        },
-      );
+    const body = (await res.text()).slice(0, 512).trim();
+    const matches = await timingSafeEqual(body, domain.challenge_nonce);
+    if (res.status !== 200 || !matches) {
+      return jsonErr(c, "OWNERSHIP_UNVERIFIED", "Ownership could not be verified.", 400, {
+        nextAction: "Serve the nonce over HTTPS on the claimed hostname",
+      });
     }
-  } catch (err) {
-    return jsonErr(
-      c,
-      "OWNERSHIP_UNVERIFIED",
-      err instanceof Error ? err.message : "Upstream fetch failed",
-      400,
-      { retryable: true, nextAction: "Ensure the upstream is publicly reachable" },
-    );
+  } catch {
+    return jsonErr(c, "OWNERSHIP_UNVERIFIED", "Ownership could not be verified.", 400, {
+      retryable: true,
+      nextAction: "Serve the nonce over HTTPS on the claimed hostname",
+    });
   }
   await c.env.DB.prepare(
     `UPDATE domains SET state = 'compatibility_pending', verified_at = ?, version = version + 1

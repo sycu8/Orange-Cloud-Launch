@@ -1,9 +1,18 @@
-function escapeHtml(s: string): string {
+import { projectUrlKind } from "@oclaunch/shared";
+
+export function escapeHtml(s: string): string {
   return s
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function httpsHref(value: unknown): string | null {
+  const raw = String(value ?? "");
+  if (projectUrlKind(raw) !== "https") return null;
+  return escapeHtml(raw);
 }
 
 export function renderPassportHtml(input: {
@@ -16,9 +25,8 @@ export function renderPassportHtml(input: {
   const purpose = escapeHtml(String(input.project.purpose ?? ""));
   const audience = escapeHtml(String(input.project.audience ?? ""));
   const slug = escapeHtml(String(input.project.slug ?? ""));
-  const live = input.project.live_url
-    ? `<p><a href="${escapeHtml(String(input.project.live_url))}">Open live app</a></p>`
-    : "";
+  const liveHref = httpsHref(input.project.live_url);
+  const live = liveHref ? `<p><a href="${liveHref}">Open live app</a></p>` : "";
   const releases = input.releases
     .map(
       (r) =>

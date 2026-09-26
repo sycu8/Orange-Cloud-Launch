@@ -1,7 +1,8 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { AppEnv } from "./lib/http.js";
 import { jsonErr } from "./lib/http.js";
-import { loadSession, requireCsrf, requireOrigin } from "./auth/session.js";
+import { GITHUB_WEBHOOK_PATH, loadSession, requireCsrf, requireOrigin } from "./auth/session.js";
+import { timingSafeEqual } from "./lib/secret.js";
 import { newId } from "./lib/ids.js";
 import { authRoutes } from "./routes/auth.js";
 import { projectRoutes } from "./routes/projects.js";
@@ -27,6 +28,10 @@ app.use("*", async (c, next) => {
   c.header("X-Content-Type-Options", "nosniff");
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header("X-Frame-Options", "DENY");
+  c.header(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+  );
 });
 
 app.use("/api/*", async (c, next) => {
@@ -49,19 +54,15 @@ app.use("/api/*", async (c, next) => {
     c.set("csrfToken", session.csrfToken);
   }
 
-  if (!requireOrigin(c)) {
+  const path = new URL(c.req.url).pathname;
+  const isWebhook = path === GITHUB_WEBHOOK_PATH;
+  if (!isWebhook && !requireOrigin(c, Boolean(session))) {
     return jsonErr(c, "CSRF_ORIGIN", "Origin not allowed", 403, {
       nextAction: "Call the API from the OCLaunch app origin only",
     });
   }
-  if (session && !(await requireCsrf(c))) {
-    // Allow unauthenticated auth bootstrap + webhook without CSRF
-    const path = new URL(c.req.url).pathname;
-    const csrfExempt =
-      path.startsWith("/api/auth/passkey/") ||
-      path === "/api/auth/dev-login" ||
-      path === "/api/auth/recovery/redeem" ||
-      path === "/api/integrations/github/webhook";
+  if (!isWebhook && session && !(await requireCsrf(c))) {
+    const csrfExempt = path.startsWith("/api/auth/passkey/");
     if (!csrfExempt && c.req.method !== "GET" && c.req.method !== "HEAD") {
       return jsonErr(c, "CSRF", "Missing or invalid CSRF token", 403, {
         nextAction: "Refresh the session and retry with X-CSRF-Token",
@@ -95,12 +96,19 @@ app.route("/api/integrations", integrationRoutes);
 app.route("/api", publicRoutes);
 
 app.post("/api/internal/cleanup", async (c) => {
-  if (c.env.APP_ENV === "production") {
-    return jsonErr(c, "FORBIDDEN", "Use scheduled cron in production", 403);
+  if (!(await maintenanceAuthorized(c))) {
+    return jsonErr(c, "FORBIDDEN", "Maintenance endpoint is disabled", 403);
   }
   const result = await runCleanup(c.env);
   return c.json(result);
 });
+
+async function maintenanceAuthorized(c: Context<AppEnv>): Promise<boolean> {
+  const expected = c.env.MAINTENANCE_SECRET;
+  const provided = c.req.header("X-Maintenance-Secret") ?? "";
+  if (!expected || !provided) return false;
+  return timingSafeEqual(provided, expected);
+}
 
 // Worker-rendered public pages (also under run_worker_first)
 app.route("/", publicRoutes);

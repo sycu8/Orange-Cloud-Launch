@@ -10,6 +10,7 @@ import {
   verifyGitHubSignature,
 } from "../integrations/github.js";
 import { relayOutbox } from "../jobs/outbox.js";
+import { timingSafeEqual } from "../lib/secret.js";
 
 export const integrationRoutes = new Hono<AppEnv>();
 
@@ -86,9 +87,10 @@ integrationRoutes.post("/moderation/reports", async (c) => {
 });
 
 integrationRoutes.post("/internal/outbox/relay", async (c) => {
-  // Local/dev maintenance endpoint — not a public control plane.
-  if (c.env.APP_ENV === "production") {
-    return jsonErr(c, "FORBIDDEN", "Use scheduled cron in production", 403);
+  const expected = c.env.MAINTENANCE_SECRET;
+  const provided = c.req.header("X-Maintenance-Secret") ?? "";
+  if (!expected || !provided || !(await timingSafeEqual(provided, expected))) {
+    return jsonErr(c, "FORBIDDEN", "Maintenance endpoint is disabled", 403);
   }
   const n = await relayOutbox(c.env);
   return jsonOk(c, { processed: n });

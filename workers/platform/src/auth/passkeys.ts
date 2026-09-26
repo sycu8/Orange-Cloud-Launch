@@ -6,9 +6,15 @@ import {
 } from "@simplewebauthn/server";
 import type { Context } from "hono";
 import type { AppEnv } from "../lib/http.js";
+import { isLoopbackHostname } from "@oclaunch/shared";
 import { newId, randomToken } from "../lib/ids.js";
 import { nowIso } from "../lib/http.js";
-import { createSession } from "./session.js";
+import { hmacSha256Hex, timingSafeEqual } from "../lib/secret.js";
+import { createSession, revokeAllSessions } from "./session.js";
+
+export const LOCAL_DEV_USER_ID = "user_local_founder";
+export const RECOVERY_CODE_BYTES = 16;
+const DISPLAY_NAME_MAX = 80;
 
 function rp(c: Context<AppEnv>) {
   return {
@@ -22,15 +28,25 @@ async function storeChallenge(
   c: Context<AppEnv>,
   kind: "registration" | "authentication",
   challenge: string,
-  userId?: string,
+  opts?: { userId?: string; pendingUserId?: string; displayName?: string },
 ): Promise<string> {
   const id = newId("chal");
   const expires = new Date(Date.now() + 5 * 60_000).toISOString();
   await c.env.DB.prepare(
-    `INSERT INTO auth_challenges (id, challenge, kind, user_id, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO auth_challenges (
+      id, challenge, kind, user_id, expires_at, created_at, pending_display_name, pending_user_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, challenge, kind, userId ?? null, expires, nowIso())
+    .bind(
+      id,
+      challenge,
+      kind,
+      opts?.userId ?? null,
+      expires,
+      nowIso(),
+      opts?.displayName ?? null,
+      opts?.pendingUserId ?? null,
+    )
     .run();
   return id;
 }
@@ -39,9 +55,10 @@ async function consumeChallenge(
   c: Context<AppEnv>,
   challengeId: string,
   kind: "registration" | "authentication",
-): Promise<{ challenge: string; userId: string | null } | null> {
+): Promise<{ challenge: string; userId: string | null; displayName: string | null } | null> {
   const row = await c.env.DB.prepare(
-    `SELECT challenge, user_id, expires_at, consumed_at, kind FROM auth_challenges WHERE id = ?`,
+    `SELECT challenge, user_id, expires_at, consumed_at, kind, pending_display_name, pending_user_id
+     FROM auth_challenges WHERE id = ?`,
   )
     .bind(challengeId)
     .first<{
@@ -50,6 +67,8 @@ async function consumeChallenge(
       expires_at: string;
       consumed_at: string | null;
       kind: string;
+      pending_display_name: string | null;
+      pending_user_id: string | null;
     }>();
   if (!row || row.kind !== kind || row.consumed_at) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) return null;
@@ -59,7 +78,11 @@ async function consumeChallenge(
     .bind(nowIso(), challengeId)
     .run();
   if (!updated.meta.changes) return null;
-  return { challenge: row.challenge, userId: row.user_id };
+  return {
+    challenge: row.challenge,
+    userId: row.user_id ?? row.pending_user_id,
+    displayName: row.pending_display_name,
+  };
 }
 
 export async function registrationOptions(
@@ -80,14 +103,12 @@ export async function registrationOptions(
       userVerification: "required",
     },
   });
-  // Insert user before challenge — auth_challenges.user_id FKs to users(id).
-  await c.env.DB.prepare(
-    `INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)`,
-  )
-    .bind(userId, displayName, nowIso())
-    .run();
-  const challengeId = await storeChallenge(c, "registration", options.challenge, userId);
-  return { options, challengeId, userId };
+  // user_id FKs to users(id). Hold the new id in pending_user_id until verification succeeds.
+  const challengeId = await storeChallenge(c, "registration", options.challenge, {
+    pendingUserId: userId,
+    displayName: displayName.slice(0, DISPLAY_NAME_MAX),
+  });
+  return { options, challengeId };
 }
 
 export async function verifyRegistration(
@@ -95,6 +116,8 @@ export async function verifyRegistration(
   body: { challengeId: string; response: unknown },
 ) {
   const { origin, rpID } = rp(c);
+  const pepper = c.env.SESSION_SECRET;
+  if (!pepper) return { ok: false as const, error: "recovery_not_configured" };
   const chal = await consumeChallenge(c, body.challengeId, "registration");
   if (!chal?.userId) return { ok: false as const, error: "challenge_invalid" };
 
@@ -106,10 +129,19 @@ export async function verifyRegistration(
     requireUserVerification: true,
   });
   if (!verification.verified || !verification.registrationInfo) {
+    await c.env.DB.prepare(`DELETE FROM auth_challenges WHERE id = ?`)
+      .bind(body.challengeId)
+      .run();
     return { ok: false as const, error: "verification_failed" };
   }
 
   const info = verification.registrationInfo;
+  const displayName = (chal.displayName || "Founder").slice(0, DISPLAY_NAME_MAX);
+  await c.env.DB.prepare(
+    `INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)`,
+  )
+    .bind(chal.userId, displayName, nowIso())
+    .run();
   const credId = newId("cred");
   await c.env.DB.prepare(
     `INSERT INTO credentials (id, user_id, credential_id, public_key, counter, transports, created_at)
@@ -129,17 +161,13 @@ export async function verifyRegistration(
   // Generate recovery codes (hashed)
   const plainCodes: string[] = [];
   for (let i = 0; i < 8; i++) {
-    const code = randomToken(4);
+    const code = randomToken(RECOVERY_CODE_BYTES);
     plainCodes.push(code);
-    const hash = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(code),
-    );
-    const hex = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const hash = await hmacSha256Hex(pepper, code);
     await c.env.DB.prepare(
       `INSERT INTO recovery_codes (id, user_id, code_hash, created_at) VALUES (?, ?, ?, ?)`,
     )
-      .bind(newId("rcv"), chal.userId, hex, nowIso())
+      .bind(newId("rcv"), chal.userId, hash, nowIso())
       .run();
   }
 
@@ -222,25 +250,53 @@ function publicKeyToBytes(key: Uint8Array): ArrayBuffer {
   return key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength) as ArrayBuffer;
 }
 
-/** Labeled local-only login for development without a hardware authenticator. */
-export async function devLogin(c: Context<AppEnv>, displayName: string) {
-  if (c.env.DEV_AUTH_BYPASS !== "true" || c.env.APP_ENV === "production") {
+export function devLoginPermitted(input: {
+  appEnv: string;
+  requestHostname: string;
+  hostHeader: string;
+  secretConfigured: boolean;
+}): boolean {
+  if (input.appEnv === "production" || input.appEnv !== "development") return false;
+  if (!input.secretConfigured) return false;
+  if (!isLoopbackHostname(input.requestHostname)) return false;
+  return isLoopbackHostname(hostnameFromHostHeader(input.hostHeader));
+}
+
+function hostnameFromHostHeader(host: string): string {
+  const trimmed = host.trim().toLowerCase();
+  if (trimmed.startsWith("[")) {
+    const end = trimmed.indexOf("]");
+    return end > 1 ? trimmed.slice(1, end) : trimmed;
+  }
+  return trimmed.split(":")[0] ?? trimmed;
+}
+
+/** Local-only login. Never selects an account by display name. */
+export async function devLogin(c: Context<AppEnv>, secret: string) {
+  const requestHostname = new URL(c.req.url).hostname;
+  const hostHeader = c.req.header("Host") ?? "";
+  const configured = Boolean(c.env.DEV_LOGIN_SECRET);
+  if (
+    !devLoginPermitted({
+      appEnv: c.env.APP_ENV,
+      requestHostname,
+      hostHeader,
+      secretConfigured: configured,
+    })
+  ) {
     return { ok: false as const, error: "dev_auth_disabled" };
   }
-  const existing = await c.env.DB.prepare(
-    `SELECT id FROM users WHERE display_name = ? ORDER BY created_at ASC LIMIT 1`,
+  const matches = await timingSafeEqual(secret, c.env.DEV_LOGIN_SECRET ?? "");
+  if (!matches) return { ok: false as const, error: "dev_auth_disabled" };
+
+  const displayName = "Local Founder";
+  await c.env.DB.prepare(
+    `INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
   )
-    .bind(displayName)
-    .first<{ id: string }>();
-  let userId = existing?.id;
-  if (!userId) {
-    userId = newId("user");
-    await c.env.DB.prepare(
-      `INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)`,
-    )
-      .bind(userId, displayName, nowIso())
-      .run();
-  }
-  const session = await createSession(c, userId);
-  return { ok: true as const, userId, csrfToken: session.csrfToken, displayName };
+    .bind(LOCAL_DEV_USER_ID, displayName, nowIso())
+    .run();
+  await revokeAllSessions(c, LOCAL_DEV_USER_ID);
+  const session = await createSession(c, LOCAL_DEV_USER_ID);
+  return { ok: true as const, userId: LOCAL_DEV_USER_ID, csrfToken: session.csrfToken, displayName };
 }

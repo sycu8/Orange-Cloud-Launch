@@ -6,9 +6,14 @@ COOKIE="$(mktemp)"
 COOKIE2="$(mktemp)"
 trap 'rm -f "$COOKIE" "$COOKIE2"' EXIT
 SLUG="smoke-$(date +%s)"
+if [[ -z "${DEV_LOGIN_SECRET:-}" ]]; then
+  echo "Set DEV_LOGIN_SECRET to the value in workers/platform/.dev.vars" >&2
+  exit 1
+fi
+LOGIN_BODY=$(DEV_LOGIN_SECRET="$DEV_LOGIN_SECRET" python3 -c 'import json,os; print(json.dumps({"secret": os.environ["DEV_LOGIN_SECRET"]}))')
 
 LOGIN=$(curl -sS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -H "Origin: $ORIGIN" \
-  -d '{"displayName":"Smoke Founder"}' "$ORIGIN/api/auth/dev-login")
+  -d "$LOGIN_BODY" "$ORIGIN/api/auth/dev-login")
 CSRF=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["csrfToken"])' <<<"$LOGIN")
 PID=$(curl -sS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -H "Origin: $ORIGIN" -H "X-CSRF-Token: $CSRF" \
   -d "{\"name\":\"Smoke\",\"slug\":\"$SLUG\",\"purpose\":\"Smoke test\",\"audience\":\"Builders\",\"liveUrl\":\"https://example.com\",\"visibility\":\"public\"}" \

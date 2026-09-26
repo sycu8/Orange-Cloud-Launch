@@ -56,7 +56,8 @@ const en: Dict = {
   "signin.displayName": "Display name",
   "signin.localDev": "Local development",
   "signin.localDevBody":
-    "Fastest path on this machine: continue without a hardware authenticator. Disabled when APP_ENV=production.",
+    "Works only on this machine when the local secret matches. It opens a dedicated local user and does not look up a display name.",
+  "signin.localSecret": "Local secret",
   "signin.continueLocal": "Continue as local founder",
   "signin.createPasskey": "Create passkey",
   "signin.signInPasskey": "Sign in with passkey",
@@ -115,13 +116,13 @@ const en: Dict = {
 
   "inbox.title": "Review inbox",
   "inbox.subtitle":
-    "Open public and unlisted missions, excluding your own projects and prior reviews.",
+    "Open public missions, excluding your own projects and prior reviews. Unlisted missions need an invite link.",
   "inbox.emptyTitle": "No matching missions right now",
   "inbox.emptyBody":
     "When founders open public review requests, they appear here with fair waiting-time ordering.",
   "inbox.browseDiscover": "Browse Discover",
   "inbox.submit": "Submit review",
-  "inbox.openApp": "Open app",
+  "inbox.openApp": "Open passport",
   "inbox.submitted": "Review submitted",
   "inbox.submittedBody": "Credit recorded for useful feedback — praise is not required.",
   "inbox.reviewHeading": "Review",
@@ -365,7 +366,8 @@ const vi: Dict = {
   "signin.displayName": "Tên hiển thị",
   "signin.localDev": "Môi trường phát triển cục bộ",
   "signin.localDevBody":
-    "Cách nhanh trên máy này: tiếp tục không cần khóa phần cứng. Tắt khi APP_ENV=production.",
+    "Chỉ hoạt động trên máy này khi bí mật cục bộ khớp. Mở một người dùng cục bộ riêng và không tìm theo tên hiển thị.",
+  "signin.localSecret": "Bí mật cục bộ",
   "signin.continueLocal": "Tiếp tục với tư cách founder cục bộ",
   "signin.createPasskey": "Tạo passkey",
   "signin.signInPasskey": "Đăng nhập bằng passkey",
@@ -424,13 +426,13 @@ const vi: Dict = {
 
   "inbox.title": "Hộp thư đánh giá",
   "inbox.subtitle":
-    "Nhiệm vụ công khai/không liệt kê, loại trừ dự án của bạn và lần đánh giá trước.",
+    "Nhiệm vụ công khai, loại trừ dự án của bạn và lần đánh giá trước. Nhiệm vụ không liệt kê cần liên kết mời.",
   "inbox.emptyTitle": "Chưa có nhiệm vụ phù hợp",
   "inbox.emptyBody":
     "Khi founder mở yêu cầu đánh giá công khai, chúng xuất hiện ở đây theo thứ tự công bằng.",
   "inbox.browseDiscover": "Xem Khám phá",
   "inbox.submit": "Gửi đánh giá",
-  "inbox.openApp": "Mở ứng dụng",
+  "inbox.openApp": "Mở passport",
   "inbox.submitted": "Đã gửi đánh giá",
   "inbox.submittedBody": "Đã ghi nhận tín dụng cho phản hồi hữu ích — không bắt buộc khen ngợi.",
   "inbox.reviewHeading": "Đánh giá",

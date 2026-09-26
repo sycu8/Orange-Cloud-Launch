@@ -1,4 +1,4 @@
-import { brandProfileToCss, RULESET_VERSION } from "@oclaunch/shared";
+import { brandProfileToCss, DEFAULT_QUOTAS, RULESET_VERSION } from "@oclaunch/shared";
 import { newId, sha256Hex } from "../lib/ids.js";
 import { runDeterministicChecks } from "../integrations/deterministic.js";
 import { runBrowserReview } from "../integrations/browser.js";
@@ -41,7 +41,7 @@ export async function processJob(env: EnvLike, jobId: string): Promise<void> {
     let result: Record<string, unknown> = {};
 
     if (job.kind === "review") {
-      result = await handleReview(env, job.project_id, ctx);
+      result = await handleReview(env, job.project_id, ctx, job.id);
     } else if (job.kind === "report") {
       result = await handleReport(env, job.project_id, ctx);
     } else if (job.kind === "export") {
@@ -78,10 +78,44 @@ export async function processJob(env: EnvLike, jobId: string): Promise<void> {
   }
 }
 
+async function reserveAutomatedReview(
+  env: EnvLike,
+  projectId: string,
+  jobId: string,
+): Promise<boolean> {
+  const month = new Date().toISOString().slice(0, 7);
+  const sourceKey = `review:${projectId}:${month}:${jobId}`;
+  const existing = await env.DB.prepare(`SELECT id FROM usage_ledger WHERE source_key = ?`)
+    .bind(sourceKey)
+    .first();
+  if (existing) return true;
+  const inserted = await env.DB.prepare(
+    `INSERT INTO usage_ledger (id, project_id, job_id, resource, quantity, unit, source_key, created_at)
+     SELECT ?, ?, ?, 'automated_review', 1, 'run', ?, ?
+     WHERE (
+       SELECT COUNT(*) FROM usage_ledger
+       WHERE project_id = ? AND resource = 'automated_review' AND created_at LIKE ?
+     ) < ?`,
+  )
+    .bind(
+      newId("use"),
+      projectId,
+      jobId,
+      sourceKey,
+      new Date().toISOString(),
+      projectId,
+      `${month}%`,
+      DEFAULT_QUOTAS.automatedReviewsPerProjectPerMonth,
+    )
+    .run();
+  return (inserted.meta.changes ?? 0) > 0;
+}
+
 async function handleReview(
   env: EnvLike,
   projectId: string,
   ctx: Record<string, unknown>,
+  jobId: string,
 ) {
   const releaseId = String(ctx.releaseId ?? "");
   const release = await env.DB.prepare(
@@ -91,25 +125,28 @@ async function handleReview(
     .first<{ id: string; source_url: string; label: string }>();
   if (!release) throw new Error("release_not_found");
 
-  // Quota: automated reviews per project per month
-  const month = new Date().toISOString().slice(0, 7);
-  const usage = await env.DB.prepare(
-    `SELECT COUNT(*) as n FROM usage_ledger
-     WHERE project_id = ? AND resource = 'automated_review' AND created_at LIKE ?`,
-  )
-    .bind(projectId, `${month}%`)
-    .first<{ n: number }>();
-  if ((usage?.n ?? 0) >= 2) {
+  const reserved = await reserveAutomatedReview(env, projectId, jobId);
+  if (!reserved) {
     return {
       status: "quota_exceeded",
       message: "Automated review quota is 2 runs per project per month. Human reviews remain available.",
     };
   }
 
-  const deterministic = await runDeterministicChecks(release.source_url);
-  const browser = await runBrowserReview(env, release.source_url);
+  const allowLoopback = env.APP_ENV === "development";
+  const deterministic = await runDeterministicChecks(release.source_url, { allowLoopback });
+  const fetchBlocked = deterministic.some((item) =>
+    /blocked|credentials|not a valid|could not be checked/i.test(item.title),
+  );
+  const browser = fetchBlocked
+    ? {
+        status: "skipped" as const,
+        message: "Release URL was not fetched.",
+        sourceUrl: "",
+      }
+    : await runBrowserReview(env, release.source_url);
   const suggestions = await suggestFindings(env, {
-    sourceUrl: release.source_url,
+    sourceUrl: fetchBlocked ? "" : release.source_url,
     deterministic,
   });
 
@@ -139,19 +176,6 @@ async function handleReview(
       )
       .run();
   }
-
-  await env.DB.prepare(
-    `INSERT INTO usage_ledger (id, project_id, job_id, resource, quantity, unit, source_key, created_at)
-     VALUES (?, ?, ?, 'automated_review', 1, 'run', ?, ?)`,
-  )
-    .bind(
-      newId("use"),
-      projectId,
-      String(ctx.jobId ?? newId("job")),
-      `review:${projectId}:${releaseId}:${month}`,
-      new Date().toISOString(),
-    )
-    .run();
 
   return {
     status: "completed",

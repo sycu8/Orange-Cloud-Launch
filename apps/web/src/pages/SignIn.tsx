@@ -21,7 +21,9 @@ export function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<string[] | null>(null);
   const [recoveryCode, setRecoveryCode] = useState("");
+  const [devSecret, setDevSecret] = useState("");
   const [busy, setBusy] = useState(false);
+  const loopback = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 
   if (!loading && me && !recovery) {
     return <Navigate to={next} replace />;
@@ -103,7 +105,7 @@ export function SignInPage() {
     try {
       const result = await api<{ csrfToken: string }>("/api/auth/dev-login", {
         method: "POST",
-        body: JSON.stringify({ displayName }),
+        body: JSON.stringify({ secret: devSecret }),
       });
       setCsrfToken(result.csrfToken);
       await refresh();
@@ -123,14 +125,23 @@ export function SignInPage() {
           <Label>{t("signin.displayName")}</Label>
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </div>
-        <Notice title={t("signin.localDev")} tone="action">
-          {t("signin.localDevBody")}
-          <div className="mt-3">
-            <Button disabled={busy} onClick={() => void devLogin()}>
-              {t("signin.continueLocal")}
-            </Button>
-          </div>
-        </Notice>
+        {loopback ? (
+          <Notice title={t("signin.localDev")} tone="action">
+            {t("signin.localDevBody")}
+            <div className="mt-3 space-y-2">
+              <Input
+                type="password"
+                value={devSecret}
+                onChange={(e) => setDevSecret(e.target.value)}
+                placeholder={t("signin.localSecret")}
+                autoComplete="off"
+              />
+              <Button disabled={busy || !devSecret} onClick={() => void devLogin()}>
+                {t("signin.continueLocal")}
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           <Button variant="secondary" disabled={busy} onClick={() => void registerPasskey()}>
             {t("signin.createPasskey")}

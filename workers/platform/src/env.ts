@@ -18,7 +18,8 @@ export type Env = {
   APP_ENV: string;
   APP_ORIGIN: string;
   WEBAUTHN_RP_ID: string;
-  DEV_AUTH_BYPASS: string;
+  DEV_LOGIN_SECRET?: string;
+  MAINTENANCE_SECRET?: string;
   ENABLE_PATCH_PR: string;
   ENABLE_PROJECT_DOMAINS: string;
   ENABLE_BROWSER_RUN: string;

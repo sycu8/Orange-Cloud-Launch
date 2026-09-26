@@ -6,6 +6,36 @@ import {
   RESERVED_SLUGS,
 } from "./constants.js";
 
+export function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+/** https with no userinfo, or http loopback. Anything else is invalid. */
+export function projectUrlKind(value: string): "https" | "loopback-http" | "invalid" {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return "invalid";
+  }
+  if (url.username || url.password) return "invalid";
+  if (url.protocol === "https:") return "https";
+  if (url.protocol === "http:" && isLoopbackHostname(url.hostname)) return "loopback-http";
+  return "invalid";
+}
+
+function projectUrlSchema(allowLoopbackHttp: boolean) {
+  return z.string().refine(
+    (value) => {
+      const kind = projectUrlKind(value);
+      if (kind === "https") return true;
+      return allowLoopbackHttp && kind === "loopback-http";
+    },
+    { message: "URL must be https" },
+  );
+}
+
 export const slugSchema = z
   .string()
   .min(2)
@@ -15,28 +45,42 @@ export const slugSchema = z
     message: "Slug is reserved",
   });
 
-export const createProjectSchema = z.object({
-  name: z.string().min(1).max(80),
-  slug: slugSchema,
-  description: z.string().max(500).default(""),
-  purpose: z.string().min(1).max(280),
-  audience: z.string().min(1).max(280),
-  primaryTask: z.string().max(280).default(""),
-  liveUrl: z.string().url().optional().or(z.literal("")),
-  category: z.string().min(1).max(64).default("productivity"),
-  visibility: z.enum(["private", "unlisted", "public"]).default("private"),
-});
+export function buildCreateProjectSchema(opts?: { allowLoopbackHttp?: boolean }) {
+  const url = projectUrlSchema(Boolean(opts?.allowLoopbackHttp));
+  return z.object({
+    name: z.string().min(1).max(80),
+    slug: slugSchema,
+    description: z.string().max(500).default(""),
+    purpose: z.string().min(1).max(280),
+    audience: z.string().min(1).max(280),
+    primaryTask: z.string().max(280).default(""),
+    liveUrl: z.union([z.literal(""), url]).optional(),
+    category: z.string().min(1).max(64).default("productivity"),
+    visibility: z.enum(["private", "unlisted", "public"]).default("private"),
+  });
+}
 
-export const updateProjectSchema = createProjectSchema.partial();
+export const createProjectSchema = buildCreateProjectSchema();
 
-export const createReleaseSchema = z.object({
-  label: z.string().min(1).max(80),
-  sourceUrl: z.string().url(),
-  commitSha: z.string().max(64).optional(),
-  deploymentId: z.string().max(128).optional(),
-  environment: z.enum(RELEASE_ENVIRONMENTS).default("preview"),
-  reviewedUrl: z.string().url().optional().or(z.literal("")),
-});
+export function buildUpdateProjectSchema(opts?: { allowLoopbackHttp?: boolean }) {
+  return buildCreateProjectSchema(opts).partial();
+}
+
+export const updateProjectSchema = buildUpdateProjectSchema();
+
+export function buildCreateReleaseSchema(opts?: { allowLoopbackHttp?: boolean }) {
+  const url = projectUrlSchema(Boolean(opts?.allowLoopbackHttp));
+  return z.object({
+    label: z.string().min(1).max(80),
+    sourceUrl: url,
+    commitSha: z.string().max(64).optional(),
+    deploymentId: z.string().max(128).optional(),
+    environment: z.enum(RELEASE_ENVIRONMENTS).default("preview"),
+    reviewedUrl: z.union([z.literal(""), url]).optional(),
+  });
+}
+
+export const createReleaseSchema = buildCreateReleaseSchema();
 
 export const createMissionSchema = z.object({
   title: z.string().min(1).max(120),
@@ -109,7 +153,7 @@ export const createDomainSchema = z.object({
   hostname: z
     .string()
     .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?\.orangecloud\.vn$/, "Must be <slug>.orangecloud.vn"),
-  upstreamUrl: z.string().url(),
+  upstreamUrl: projectUrlSchema(false),
 });
 
 export const createVerificationSchema = z.object({
