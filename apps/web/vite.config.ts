@@ -15,5 +15,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    // CSP img-src 'self' blocks data: images, which hid the logo.
+    assetsInlineLimit: 0,
   },
 });

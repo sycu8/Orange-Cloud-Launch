@@ -25,6 +25,7 @@ import { workspaceRoutes } from "./routes/workspace.js";
 import { relayOutbox } from "./jobs/outbox.js";
 import { runCleanup } from "./jobs/cleanup.js";
 import { isIndexableHost, robotsTxt, sitemapXml } from "./lib/seo.js";
+import { publicStaticKey, staticObjectResponse } from "./lib/static-files.js";
 
 const app = new Hono<AppEnv>();
 
@@ -140,17 +141,38 @@ app.get("/sitemap.xml", (c) => {
 });
 
 app.get("/", async (c) => {
-  if (!c.env.ASSETS) {
+  const file = await readPublishedFile(c, "/index.html");
+  if (!file) {
     return c.text("OCLaunch UI assets not built. Run npm run build -w @oclaunch/web", 503);
   }
-  const assetUrl = new URL(c.req.url);
-  assetUrl.pathname = "/index.html";
-  assetUrl.search = "";
-  const assetResponse = await c.env.ASSETS.fetch(new Request(assetUrl.toString(), { method: "GET" }));
-  if (isIndexableHost(new URL(c.req.url).hostname)) {
-    return assetResponse;
-  }
-  const headers = new Headers(assetResponse.headers);
+  return applyStagingRobots(file, isIndexableHost(new URL(c.req.url).hostname));
+});
+
+app.get("/index.html", (c) => servePublished(c, "/index.html"));
+app.get("/favicon.svg", (c) => servePublished(c, "/favicon.svg"));
+app.get("/assets/*", (c) => servePublished(c, new URL(c.req.url).pathname));
+
+async function servePublished(c: Context<AppEnv>, pathname: string) {
+  const file = await readPublishedFile(c, pathname);
+  return file ?? c.text("Not found", 404);
+}
+
+async function readPublishedFile(c: Context<AppEnv>, pathname: string): Promise<Response | null> {
+  const key = publicStaticKey(pathname);
+  if (!key) return null;
+  const fromR2 = await staticObjectResponse(c.env.STATIC, key);
+  if (fromR2) return fromR2;
+  if (!c.env.ASSETS) return null;
+  const url = new URL(c.req.url);
+  url.pathname = `/${key}`;
+  url.search = "";
+  const res = await c.env.ASSETS.fetch(new Request(url.toString(), { method: "GET" }));
+  return res.ok ? res : null;
+}
+
+function applyStagingRobots(response: Response, indexable: boolean): Response {
+  if (indexable) return response;
+  const headers = new Headers(response.headers);
   headers.set("X-Robots-Tag", "noindex, nofollow");
   headers.set("Cache-Control", "no-store");
   return new HTMLRewriter()
@@ -159,8 +181,8 @@ app.get("/", async (c) => {
         element.setAttribute("content", "noindex, nofollow");
       },
     })
-    .transform(new Response(assetResponse.body, { status: assetResponse.status, headers }));
-});
+    .transform(new Response(response.body, { status: response.status, headers }));
+}
 
 app.notFound(async (c) => {
   const path = new URL(c.req.url).pathname;

@@ -2,9 +2,10 @@
  * Binding inventory (MVP):
  * | Binding    | Service        | Purpose                         | Access        | Failure behavior              |
  * |------------|----------------|---------------------------------|---------------|-------------------------------|
- * | ASSETS     | Static Assets  | SPA shell                       | HTTP reads    | Fall through SPA              |
+ * | ASSETS     | Static Assets  | SPA shell fallback              | HTTP reads    | Fall through SPA              |
  * | DB         | D1             | Authoritative records + outbox  | Prepared SQL  | 5xx; no silent fallback       |
  * | ARTIFACTS  | R2             | Screenshots/exports             | Stream I/O    | Structured not-configured/err |
+ * | STATIC     | R2             | Public HTML, JS, CSS, logos     | HTTP reads    | Fall back to ASSETS           |
  * | (vars)     | Worker vars    | Feature flags / origins         | Read-only     | Safe defaults                 |
  *
  * Deferred until credentials/provisioning:
@@ -19,6 +20,8 @@ import type { BrowserRunBinding } from "./integrations/browser.js";
 export type Env = {
   DB: D1Database;
   ARTIFACTS: R2Bucket;
+  /** Public site files (logo, favicon, built JS/CSS, index.html). */
+  STATIC?: R2Bucket;
   ASSETS?: Fetcher;
   /** Cloudflare Browser Run binding — human-tester viewport snapshots. */
   BROWSER?: BrowserRunBinding;
