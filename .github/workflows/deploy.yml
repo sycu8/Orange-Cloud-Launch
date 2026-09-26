@@ -1,0 +1,189 @@
+# Manual Cloudflare Workers deploy for OCLaunch.
+# Trigger only. Merging this file does not deploy.
+# Credentials come from GitHub Actions secrets/vars. Never commit values.
+name: Deploy OCLaunch
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Wrangler environment
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      confirm:
+        description: For production, type launch.orangecloud.vn. Leave empty for staging.
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oclaunch-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Require a known environment
+        env:
+          WRANGLER_ENV: ${{ inputs.environment }}
+        run: |
+          case "$WRANGLER_ENV" in
+            staging|production) ;;
+            *)
+              echo "Unsupported environment: $WRANGLER_ENV"
+              exit 1
+              ;;
+          esac
+
+      - name: Confirm production hostname
+        if: inputs.environment == 'production'
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "launch.orangecloud.vn" ]; then
+            echo "Production deploy refused. Set confirm to launch.orangecloud.vn."
+            exit 1
+          fi
+
+      - name: Require Cloudflare credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+        run: |
+          missing=0
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Missing GitHub Actions secret: CLOUDFLARE_API_TOKEN"
+            missing=1
+          fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Missing GitHub Actions secret or variable: CLOUDFLARE_ACCOUNT_ID"
+            missing=1
+          fi
+          if [ -z "$CLOUDFLARE_D1_DATABASE_ID" ]; then
+            echo "Missing GitHub Actions secret: CLOUDFLARE_D1_DATABASE_ID"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Inject D1 id and optional R2 bucket from secrets
+        env:
+          WRANGLER_ENV: ${{ inputs.environment }}
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re, sys
+          env = os.environ["WRANGLER_ENV"]
+          placeholders = {
+              "staging": "REPLACE_WITH_STAGING_DATABASE_ID",
+              "production": "REPLACE_WITH_PRODUCTION_DATABASE_ID",
+          }
+          default_buckets = {
+              "staging": "oclaunch-artifacts-staging",
+              "production": "oclaunch-artifacts-production",
+          }
+          if env not in placeholders:
+              print("Unsupported environment")
+              sys.exit(1)
+          database_id = os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
+          if not database_id:
+              print("Missing GitHub Actions secret: CLOUDFLARE_D1_DATABASE_ID")
+              sys.exit(1)
+          if not re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", database_id):
+              print("GitHub Actions secret CLOUDFLARE_D1_DATABASE_ID is not a D1 database UUID")
+              sys.exit(1)
+          path = pathlib.Path("workers/platform/wrangler.toml")
+          text = path.read_text()
+          placeholder = placeholders[env]
+          if placeholder not in text:
+              print(f"workers/platform/wrangler.toml is missing {placeholder}")
+              sys.exit(1)
+          text = text.replace(placeholder, database_id, 1)
+          bucket = os.environ.get("CLOUDFLARE_R2_BUCKET_NAME", "").strip()
+          if bucket:
+              if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", bucket):
+                  print("GitHub Actions secret CLOUDFLARE_R2_BUCKET_NAME is not a valid bucket name")
+                  sys.exit(1)
+              needle = f'bucket_name = "{default_buckets[env]}"'
+              if needle not in text:
+                  print(f"workers/platform/wrangler.toml has no default bucket_name for {env}")
+                  sys.exit(1)
+              text = text.replace(needle, f'bucket_name = "{bucket}"', 1)
+              print("Injected R2 bucket name from CLOUDFLARE_R2_BUCKET_NAME")
+          else:
+              print("CLOUDFLARE_R2_BUCKET_NAME is not set; using the bucket name in wrangler.toml")
+          path.write_text(text)
+          print(f"Injected D1 database id for {env} from CLOUDFLARE_D1_DATABASE_ID")
+          PY
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install and build assets
+        run: |
+          npm ci
+          npm run build -w @oclaunch/shared
+          npm run build -w @oclaunch/web
+
+      - name: Apply D1 migrations and deploy
+        working-directory: workers/platform
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENV: ${{ inputs.environment }}
+        run: |
+          npx wrangler d1 migrations apply "oclaunch-${WRANGLER_ENV}" --env "$WRANGLER_ENV"
+          npx wrangler deploy --env "$WRANGLER_ENV"
+
+      - name: Sync optional Worker secrets
+        working-directory: workers/platform
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENV: ${{ inputs.environment }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.GITHUB_WEBHOOK_SECRET }}
+          MAINTENANCE_SECRET: ${{ secrets.MAINTENANCE_SECRET }}
+        run: |
+          set +x
+          sync_secret() {
+            name="$1"
+            case "$name" in
+              SESSION_SECRET) value="$SESSION_SECRET" ;;
+              GITHUB_APP_ID) value="$GITHUB_APP_ID" ;;
+              GITHUB_WEBHOOK_SECRET) value="$GITHUB_WEBHOOK_SECRET" ;;
+              MAINTENANCE_SECRET) value="$MAINTENANCE_SECRET" ;;
+              *)
+                echo "Refusing unknown Worker secret name: $name"
+                return 1
+                ;;
+            esac
+            if [ -z "$value" ]; then
+              echo "GitHub Actions secret not set: $name (Worker secret left unchanged)"
+              return 0
+            fi
+            printf '%s' "$value" | npx wrangler secret put "$name" --env "$WRANGLER_ENV"
+            echo "Updated Worker secret: $name"
+          }
+          sync_secret SESSION_SECRET
+          sync_secret GITHUB_APP_ID
+          sync_secret GITHUB_WEBHOOK_SECRET
+          sync_secret MAINTENANCE_SECRET
