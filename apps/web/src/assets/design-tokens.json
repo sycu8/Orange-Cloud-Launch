@@ -1,0 +1,57 @@
+{
+  "name": "OCLaunch",
+  "version": "1.0",
+  "colors": {
+    "ink": "#17252B",
+    "canvas": "#FAF8F5",
+    "surface": "#FFFFFF",
+    "action": "#C2410C",
+    "accent": "#FF8A4C",
+    "orangeTint": "#FFF0E7",
+    "positive": "#0F766E",
+    "positiveTint": "#E8F4F1",
+    "muted": "#59676D",
+    "border": "#DFE4E2",
+    "inputBorder": "#84918F",
+    "focus": "#2563EB"
+  },
+  "typography": {
+    "sans": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Arial, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, Consolas, monospace",
+    "bodySize": "16px",
+    "bodyLineHeight": 1.5,
+    "weights": {
+      "body": 400,
+      "label": 600,
+      "heading": 750
+    }
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64
+  ],
+  "radii": {
+    "control": "10px",
+    "card": "16px",
+    "panel": "24px"
+  },
+  "motion": {
+    "fast": "160ms",
+    "standard": "200ms",
+    "reducedMotion": "respect prefers-reduced-motion"
+  },
+  "control": {
+    "minimumHeight": "44px",
+    "focusRing": "2px solid #2563EB"
+  },
+  "brand": {
+    "domain": "launch.orangecloud.vn",
+    "tagline": "Build. Review. Improve."
+  }
+}

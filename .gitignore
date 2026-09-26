@@ -1,0 +1,16 @@
+node_modules
+dist
+.wrangler
+.dev.vars
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage
+.turbo
+*.tsbuildinfo
+.vite
+apps/web/dist
+workers/platform/dist
+packages/shared/dist

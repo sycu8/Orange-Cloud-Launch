@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme {
+  --color-ink: var(--oc-ink);
+  --color-canvas: var(--oc-canvas);
+  --color-surface: var(--oc-surface);
+  --color-action: var(--oc-action);
+  --color-accent: var(--oc-accent);
+  --color-orange-tint: var(--oc-orangeTint);
+  --color-positive: var(--oc-positive);
+  --color-positive-tint: var(--oc-positiveTint);
+  --color-muted: var(--oc-muted);
+  --color-border: var(--oc-border);
+  --color-input-border: var(--oc-inputBorder);
+  --color-focus: var(--oc-focus);
+  --font-sans: var(--oc-font-sans);
+  --radius-control: var(--oc-radius-control);
+  --radius-card: var(--oc-radius-card);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--oc-font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--oc-ink);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(255, 138, 76, 0.18), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgba(15, 118, 110, 0.08), transparent 50%),
+    var(--oc-canvas);
+}
+
+a {
+  color: var(--oc-action);
+}
+
+::selection {
+  background: var(--oc-orangeTint);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loop-draw {
+  from {
+    stroke-dashoffset: 120;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-rise {
+  animation: rise-in 200ms ease-out both;
+}
+
+.animate-rise-delay {
+  animation: rise-in 200ms ease-out 80ms both;
+}
+
+.hero-loop path {
+  stroke-dasharray: 120;
+  animation: loop-draw 700ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-rise-delay,
+  .hero-loop path {
+    animation: none !important;
+  }
+}
