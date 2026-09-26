@@ -4,6 +4,7 @@ import type { AppEnv } from "../lib/http.js";
 import { jsonErr, jsonOk, nowIso } from "../lib/http.js";
 import { newId, randomToken, sha256Hex } from "../lib/ids.js";
 import { audit, requireMember } from "../db/access.js";
+import { detectUpload, reserveArtifactBytes } from "../lib/uploads.js";
 
 const MAX_EVIDENCE_BYTES = 2_000_000;
 
@@ -28,15 +29,20 @@ async function storeReviewEvidence(
   if (file.size > MAX_EVIDENCE_BYTES) {
     return { error: jsonErr(c, "VALIDATION", "File exceeds 2MB upload cap", 400) };
   }
-  const mime = file.type || "application/octet-stream";
-  if (!mime.startsWith("image/") || mime.includes("svg")) {
-    return {
-      error: jsonErr(c, "VALIDATION", "Pin evidence must be a PNG, JPEG, or WebP image", 400),
-    };
-  }
   const buf = await file.arrayBuffer();
+  const detected = detectUpload(new Uint8Array(buf), "image");
+  if ("error" in detected) {
+    return { error: jsonErr(c, "VALIDATION", detected.error, 400) };
+  }
+  const mime = detected.mime;
   const hash = await sha256Hex(buf);
   const id = newId("art");
+  const reserved = await reserveArtifactBytes(c.env.DB, projectId, id, file.size);
+  if (!reserved) {
+    return {
+      error: jsonErr(c, "QUOTA_EXCEEDED", "Project upload quota for this month is full", 429),
+    };
+  }
   const key = `projects/${projectId}/releases/${releaseId}/pins/${id}`;
   await c.env.ARTIFACTS.put(key, buf, {
     httpMetadata: { contentType: mime },
@@ -338,8 +344,8 @@ missionRoutes.post("/missions/:missionId/evidence", async (c) => {
   if (!mission || mission.state !== "open") {
     return jsonErr(c, "NOT_FOUND", "Mission not open", 404);
   }
-  if (mission.visibility === "private") {
-    return jsonErr(c, "FORBIDDEN", "Private missions require an invite link", 403);
+  if (mission.visibility !== "public") {
+    return jsonErr(c, "FORBIDDEN", "This mission requires an invite link", 403);
   }
   if (mission.owner_id === userId) {
     return jsonErr(c, "FORBIDDEN", "Self-review evidence is not allowed", 403);
@@ -383,7 +389,7 @@ missionRoutes.post("/projects/:projectId/missions/:missionId/rotate-invite", asy
   });
 });
 
-/** Public/unlisted open missions can be reviewed from the inbox without the opaque invite token. */
+/** Public open missions can be reviewed from the inbox. Unlisted and private need the invite token. */
 missionRoutes.post("/missions/:missionId/reviews", async (c) => {
   const userId = c.get("userId");
   if (!userId) return jsonErr(c, "UNAUTHENTICATED", "Sign in to submit a review", 401);
@@ -406,8 +412,8 @@ missionRoutes.post("/missions/:missionId/reviews", async (c) => {
   if (!mission || mission.state !== "open") {
     return jsonErr(c, "NOT_FOUND", "Mission not open", 404);
   }
-  if (mission.visibility === "private") {
-    return jsonErr(c, "FORBIDDEN", "Private missions require an invite link", 403);
+  if (mission.visibility !== "public") {
+    return jsonErr(c, "FORBIDDEN", "This mission requires an invite link", 403);
   }
   return submitReviewForMission(c, mission, userId);
 });

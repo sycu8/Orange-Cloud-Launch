@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import {
-  createReleaseSchema,
+  buildCreateReleaseSchema,
   DANGEROUS_PATH_MISSIONS,
   RULESET_VERSION,
 } from "@oclaunch/shared";
@@ -16,7 +16,9 @@ releaseRoutes.post("/projects/:projectId/releases", async (c) => {
   const projectId = c.req.param("projectId");
   const role = await requireMember(c, projectId, ["owner", "maintainer"]);
   if (!role) return jsonErr(c, "FORBIDDEN", "Maintainer access required", 403);
-  const parsed = createReleaseSchema.safeParse(await c.req.json());
+  const parsed = buildCreateReleaseSchema({
+    allowLoopbackHttp: c.env.APP_ENV === "development",
+  }).safeParse(await c.req.json());
   if (!parsed.success) {
     return jsonErr(c, "VALIDATION", parsed.error.issues[0]?.message ?? "Invalid", 400);
   }
@@ -119,9 +121,11 @@ releaseRoutes.post("/projects/:projectId/releases/:releaseId/runs", async (c) =>
   const role = await requireMember(c, projectId, ["owner", "maintainer"]);
   if (!role) return jsonErr(c, "FORBIDDEN", "Maintainer access required", 403);
   const body = await c.req.json<{ idempotencyKey?: string }>().catch(() => ({}));
+  const clientKey = (body as { idempotencyKey?: string }).idempotencyKey;
   const key =
-    (body as { idempotencyKey?: string }).idempotencyKey ||
-    `review:${releaseId}:${new Date().toISOString().slice(0, 10)}`;
+    clientKey && /^[A-Za-z0-9:_-]{1,80}$/.test(clientKey)
+      ? `review:${releaseId}:${clientKey}`
+      : `review:${releaseId}:${new Date().toISOString().slice(0, 10)}`;
   const { jobId, created } = await enqueueJob(c, {
     projectId,
     kind: "review",

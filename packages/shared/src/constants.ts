@@ -79,6 +79,7 @@ export const RELEASE_ENVIRONMENTS = ["localhost", "preview", "production"] as co
 export const DEFAULT_QUOTAS = {
   projectsPerAccount: 3,
   automatedReviewsPerProjectPerMonth: 2,
+  artifactBytesPerProjectPerMonth: 20_000_000,
   routesPerAutomatedReview: 3,
   viewportsPerAutomatedReview: 2,
   activePatchBuildsPerWorkspace: 1,

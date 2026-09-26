@@ -2,7 +2,7 @@
 
 ## Environment
 
-Copy `.env.example` values into `workers/platform/.dev.vars` as needed. Wrangler `[vars]` already enable local `DEV_AUTH_BYPASS`.
+Copy `.env.example` into `workers/platform/.dev.vars`. Set `SESSION_SECRET` and `DEV_LOGIN_SECRET` there. Local login works only on loopback and only for a dedicated local user; it is not enabled by Wrangler `[vars]`. Apply D1 migrations, including `0002_security.sql`, before signing in with a recovery code.
 
 ## Main local loop
 

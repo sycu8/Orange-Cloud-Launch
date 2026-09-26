@@ -33,7 +33,7 @@ workspaceRoutes.get("/workspace", async (c) => {
     `SELECT COUNT(*) as n FROM missions m
      JOIN projects p ON p.id = m.project_id
      WHERE m.state = 'open'
-       AND p.visibility IN ('public','unlisted')
+       AND p.visibility = 'public'
        AND p.owner_id != ?
        AND NOT EXISTS (
          SELECT 1 FROM reviews r WHERE r.mission_id = m.id AND r.reviewer_id = ?
@@ -57,13 +57,12 @@ workspaceRoutes.get("/review-inbox", async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT m.id as mission_id, m.title, m.instructions, m.language, m.topic_tags, m.created_at,
             p.id as project_id, p.name as project_name, p.slug, p.audience, p.category,
-            r.id as release_id, r.label as release_label, r.source_url,
-            (SELECT invite_token_hash FROM missions WHERE id = m.id) as invite_token_hash
+            r.id as release_id, r.label as release_label
      FROM missions m
      JOIN projects p ON p.id = m.project_id
      JOIN releases r ON r.project_id = m.project_id AND r.id = m.release_id
      WHERE m.state = 'open'
-       AND p.visibility IN ('public','unlisted')
+       AND p.visibility = 'public'
        AND p.owner_id != ?
        AND NOT EXISTS (
          SELECT 1 FROM reviews rev WHERE rev.mission_id = m.id AND rev.reviewer_id = ?
@@ -93,11 +92,10 @@ workspaceRoutes.get("/review-inbox", async (c) => {
         category: r.category,
         releaseId: r.release_id,
         releaseLabel: r.release_label,
-        sourceUrl: r.source_url,
         passportPath: `/p/${r.slug}`,
       };
     }),
-    note: "Matching excludes your own projects and prior reviews. Founders share invite links for submission; inbox surfaces open public/unlisted missions.",
+    note: "Matching excludes your own projects and prior reviews. The inbox lists public missions only. Unlisted and private missions need an invite link.",
   });
 });
 

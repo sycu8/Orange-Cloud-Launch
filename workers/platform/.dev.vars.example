@@ -1,3 +1,5 @@
 SESSION_SECRET=local-dev-only-change-me
+DEV_LOGIN_SECRET=local-dev-only-change-me-too
+# MAINTENANCE_SECRET=local-dev-only-change-me-three
 # GITHUB_APP_ID=
 # GITHUB_WEBHOOK_SECRET=

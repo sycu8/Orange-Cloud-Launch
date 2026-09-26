@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCreateProjectSchema,
+  buildCreateReleaseSchema,
   createOwnerFindingSchema,
   createProjectSchema,
   createReleaseSchema,
+  projectUrlKind,
   slugSchema,
 } from "./schemas.js";
 import { brandProfileToCss, defaultBrandProfile } from "./brand.js";
@@ -27,6 +30,47 @@ describe("createProjectSchema", () => {
       audience: "Busy professionals",
     });
     expect(parsed.visibility).toBe("private");
+  });
+
+  it("allows only https project URLs", () => {
+    expect(projectUrlKind("https://example.com/app")).toBe("https");
+    expect(projectUrlKind("http://127.0.0.1:8787/app")).toBe("loopback-http");
+    expect(projectUrlKind("http://example.com/app")).toBe("invalid");
+    expect(projectUrlKind("https://user:secret@example.com/app")).toBe("invalid");
+    expect(projectUrlKind("ftp://example.com/app")).toBe("invalid");
+    expect(projectUrlKind("javascript:void(0)")).toBe("invalid");
+    expect(projectUrlKind("data:text/plain,hi")).toBe("invalid");
+    expect(() =>
+      createProjectSchema.parse({
+        name: "Planner",
+        slug: "planner-app",
+        purpose: "Help people plan a week",
+        audience: "Busy professionals",
+        liveUrl: "http://example.com",
+      }),
+    ).toThrow(/https/i);
+    expect(
+      buildCreateProjectSchema({ allowLoopbackHttp: true }).parse({
+        name: "Planner",
+        slug: "planner-app",
+        purpose: "Help people plan a week",
+        audience: "Busy professionals",
+        liveUrl: "http://localhost:8787",
+      }).liveUrl,
+    ).toBe("http://localhost:8787");
+    expect(
+      buildCreateReleaseSchema().parse({
+        label: "v1",
+        sourceUrl: "https://example.com/release",
+      }).sourceUrl,
+    ).toBe("https://example.com/release");
+    expect(() =>
+      buildCreateReleaseSchema().parse({
+        label: "v1",
+        sourceUrl: "https://example.com/release",
+        reviewedUrl: "javascript:void(0)",
+      }),
+    ).toThrow(/https/i);
   });
 });
 

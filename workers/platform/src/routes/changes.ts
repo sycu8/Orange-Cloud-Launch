@@ -266,10 +266,10 @@ changeRoutes.get("/projects/:projectId/changes/:changeId/export-download", async
   if (!art) return jsonErr(c, "NOT_FOUND", "Artifact missing", 404);
   const obj = await c.env.ARTIFACTS.get(art.r2_key);
   if (!obj) return jsonErr(c, "NOT_FOUND", "Object missing in R2", 404);
-  return new Response(obj.body, {
-    headers: {
-      "content-type": art.mime_type,
-      "content-disposition": `attachment; filename="oclaunch-export-${changeId}.json"`,
-    },
-  });
+  const headers = new Headers();
+  headers.set("content-type", "application/json");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("content-security-policy", "sandbox");
+  headers.set("content-disposition", "attachment; filename=\"oclaunch-export.json\"");
+  return new Response(obj.body, { headers });
 });

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createProjectSchema, updateProjectSchema, DEFAULT_QUOTAS } from "@oclaunch/shared";
+import { buildCreateProjectSchema, buildUpdateProjectSchema, DEFAULT_QUOTAS } from "@oclaunch/shared";
 import type { AppEnv } from "../lib/http.js";
 import { jsonErr, jsonOk, nowIso } from "../lib/http.js";
 import { newId } from "../lib/ids.js";
@@ -24,31 +24,25 @@ projectRoutes.get("/projects", async (c) => {
 projectRoutes.post("/projects", async (c) => {
   const userId = c.get("userId");
   if (!userId) return jsonErr(c, "UNAUTHENTICATED", "Sign in required", 401);
-  const parsed = createProjectSchema.safeParse(await c.req.json());
+  const parsed = buildCreateProjectSchema({
+    allowLoopbackHttp: c.env.APP_ENV === "development",
+  }).safeParse(await c.req.json());
   if (!parsed.success) {
     return jsonErr(c, "VALIDATION", parsed.error.issues[0]?.message ?? "Invalid", 400);
-  }
-  const count = await c.env.DB.prepare(
-    `SELECT COUNT(*) as n FROM projects WHERE owner_id = ?`,
-  )
-    .bind(userId)
-    .first<{ n: number }>();
-  if ((count?.n ?? 0) >= DEFAULT_QUOTAS.projectsPerAccount) {
-    return jsonErr(c, "QUOTA_EXCEEDED", "Account project quota is 3", 429, {
-      nextAction: "Archive or delete an existing project before creating another",
-    });
   }
   const id = newId("prj");
   const input = parsed.data;
   const ts = nowIso();
   try {
-    await c.env.DB.batch([
-      c.env.DB.prepare(
-        `INSERT INTO projects (
-          id, owner_id, slug, name, description, purpose, audience, primary_task,
-          live_url, category, visibility, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-      ).bind(
+    const inserted = await c.env.DB.prepare(
+      `INSERT INTO projects (
+        id, owner_id, slug, name, description, purpose, audience, primary_task,
+        live_url, category, visibility, version, created_at, updated_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?
+      WHERE (SELECT COUNT(*) FROM projects WHERE owner_id = ?) < ?`,
+    )
+      .bind(
         id,
         userId,
         input.slug,
@@ -62,7 +56,16 @@ projectRoutes.post("/projects", async (c) => {
         input.visibility,
         ts,
         ts,
-      ),
+        userId,
+        DEFAULT_QUOTAS.projectsPerAccount,
+      )
+      .run();
+    if (!inserted.meta.changes) {
+      return jsonErr(c, "QUOTA_EXCEEDED", "Account project quota is 3", 429, {
+        nextAction: "Archive or delete an existing project before creating another",
+      });
+    }
+    await c.env.DB.batch([
       c.env.DB.prepare(
         `INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, 'owner')`,
       ).bind(id, userId),
@@ -131,7 +134,9 @@ projectRoutes.patch("/projects/:id", async (c) => {
   const id = c.req.param("id");
   const role = await requireMember(c, id, ["owner", "maintainer"]);
   if (!role) return jsonErr(c, "FORBIDDEN", "Maintainer access required", 403);
-  const parsed = updateProjectSchema.safeParse(await c.req.json());
+  const parsed = buildUpdateProjectSchema({
+    allowLoopbackHttp: c.env.APP_ENV === "development",
+  }).safeParse(await c.req.json());
   if (!parsed.success) {
     return jsonErr(c, "VALIDATION", parsed.error.issues[0]?.message ?? "Invalid", 400);
   }

@@ -5,6 +5,30 @@ import { newId } from "../lib/ids.js";
 import { audit, requireMember } from "../db/access.js";
 import { renderReportHtml, renderPassportHtml } from "../public-html/render.js";
 
+const SHARE_FINDING_FIELDS = ["title", "category", "severity", "state", "provenance"] as const;
+
+/** Public share object. Anything not listed here stays private. */
+export function redactReportSummary(full: Record<string, unknown>) {
+  const findings = Array.isArray(full.findings)
+    ? full.findings.map((item) => {
+        const finding = item as Record<string, unknown>;
+        const narrowed: Record<string, unknown> = {};
+        for (const field of SHARE_FINDING_FIELDS) narrowed[field] = finding[field];
+        return narrowed;
+      })
+    : [];
+  const actions = Array.isArray(full.next_three_actions)
+    ? full.next_three_actions.filter((item): item is string => typeof item === "string")
+    : [];
+  return {
+    label: typeof full.label === "string" ? full.label : "Release report",
+    captured_at: typeof full.captured_at === "string" ? full.captured_at : "",
+    findings,
+    next_three_actions: actions,
+    note: "Redacted share — personal evidence and screenshots omitted by default.",
+  };
+}
+
 export const reportRoutes = new Hono<AppEnv>();
 
 reportRoutes.get("/projects/:projectId/releases/:releaseId/compare/:otherReleaseId", async (c) => {
@@ -124,19 +148,7 @@ reportRoutes.post("/projects/:projectId/reports/:reportId/shares", async (c) => 
     .first<{ summary_json: string }>();
   if (!report) return jsonErr(c, "NOT_FOUND", "Report not found", 404);
   const full = JSON.parse(report.summary_json) as Record<string, unknown>;
-  const redacted = {
-    ...full,
-    findings: Array.isArray(full.findings)
-      ? (full.findings as Array<Record<string, unknown>>).map((f) => ({
-          title: f.title,
-          category: f.category,
-          severity: f.severity,
-          state: f.state,
-          provenance: f.provenance,
-        }))
-      : [],
-    note: "Redacted share — personal evidence and screenshots omitted by default.",
-  };
+  const redacted = redactReportSummary(full);
   const id = newId("shr");
   const expires = new Date(Date.now() + 7 * 864e5).toISOString();
   await c.env.DB.prepare(

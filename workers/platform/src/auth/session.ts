@@ -3,9 +3,21 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { AppEnv } from "../lib/http.js";
 import { newId, randomToken, sha256Hex } from "../lib/ids.js";
 import { nowIso } from "../lib/http.js";
+import { timingSafeEqual } from "../lib/secret.js";
+
+export const GITHUB_WEBHOOK_PATH = "/api/integrations/github/webhook";
 
 const SESSION_COOKIE = "oclaunch_session";
 const SESSION_DAYS = 14;
+
+function cookieOptions(c: Context<AppEnv>) {
+  return {
+    path: "/",
+    httpOnly: true,
+    secure: c.env.APP_ENV !== "development",
+    sameSite: "Lax" as const,
+  };
+}
 
 export async function createSession(
   c: Context<AppEnv>,
@@ -23,28 +35,33 @@ export async function createSession(
     .bind(id, userId, tokenHash, csrfToken, expires, nowIso())
     .run();
 
-  const secure = c.env.APP_ENV !== "development";
   setCookie(c, SESSION_COOKIE, token, {
-    path: "/",
-    httpOnly: true,
-    secure,
-    sameSite: "Lax",
+    ...cookieOptions(c),
     expires: new Date(expires),
   });
   return { token, csrfToken };
+}
+
+export async function revokeAllSessions(c: Context<AppEnv>, userId: string): Promise<void> {
+  await c.env.DB.prepare(
+    `UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`,
+  )
+    .bind(nowIso(), userId)
+    .run();
 }
 
 export async function revokeSession(c: Context<AppEnv>): Promise<void> {
   const token = getCookie(c, SESSION_COOKIE);
   if (token) {
     const tokenHash = await sha256Hex(token);
-    await c.env.DB.prepare(
-      `UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL`,
+    const row = await c.env.DB.prepare(
+      `SELECT user_id FROM sessions WHERE token_hash = ?`,
     )
-      .bind(nowIso(), tokenHash)
-      .run();
+      .bind(tokenHash)
+      .first<{ user_id: string }>();
+    if (row) await revokeAllSessions(c, row.user_id);
   }
-  deleteCookie(c, SESSION_COOKIE, { path: "/" });
+  deleteCookie(c, SESSION_COOKIE, cookieOptions(c));
 }
 
 export async function loadSession(
@@ -68,15 +85,15 @@ export async function loadSession(
   return { userId: row.user_id, csrfToken: row.csrf_token };
 }
 
-export function requireOrigin(c: Context<AppEnv>): boolean {
+export function requireOrigin(c: Context<AppEnv>, hasSession = false): boolean {
   if (c.req.method === "GET" || c.req.method === "HEAD" || c.req.method === "OPTIONS") {
     return true;
   }
+  const path = new URL(c.req.url).pathname;
+  if (path === GITHUB_WEBHOOK_PATH) return true;
   const origin = c.req.header("Origin");
-  if (!origin) {
-    // Non-browser clients / same-origin navigations without Origin
-    return c.req.header("Sec-Fetch-Site") !== "cross-site";
-  }
+  if (hasSession) return origin === c.env.APP_ORIGIN;
+  if (!origin) return c.req.header("Sec-Fetch-Site") !== "cross-site";
   return origin === c.env.APP_ORIGIN;
 }
 
@@ -84,7 +101,8 @@ export async function requireCsrf(c: Context<AppEnv>): Promise<boolean> {
   if (c.req.method === "GET" || c.req.method === "HEAD" || c.req.method === "OPTIONS") {
     return true;
   }
-  const header = c.req.header("X-CSRF-Token");
-  const expected = c.get("csrfToken");
-  return Boolean(header && expected && header === expected);
+  const header = c.req.header("X-CSRF-Token") ?? "";
+  const expected = c.get("csrfToken") ?? "";
+  if (!header || !expected) return false;
+  return timingSafeEqual(header, expected);
 }
