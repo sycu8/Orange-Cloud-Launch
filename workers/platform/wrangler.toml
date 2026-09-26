@@ -36,6 +36,13 @@ ENABLE_BROWSER_RUN = "false"
 ENABLE_WORKERS_AI = "false"
 RULESET_VERSION = "1.0.0"
 
+# Browser Run (formerly Browser Rendering) — human-tester viewport snapshots.
+# Uncomment when provisioned; requires ENABLE_BROWSER_RUN=true.
+# quickAction() needs remote mode for local wrangler dev.
+# [browser]
+# binding = "BROWSER"
+# remote = true
+
 # Queues require remote provisioning; local path uses transactional outbox + sync processor.
 # [[queues.producers]]
 # binding = "JOBS"

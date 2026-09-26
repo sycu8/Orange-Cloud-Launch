@@ -10,11 +10,19 @@
  * Deferred until credentials/provisioning:
  * JOBS queue, REVIEW_FLOW/PATCH_FLOW workflows, BROWSER, AI, ADMISSION DO,
  * GITHUB service binding, BUILDER/Sandbox, project-domain gateway.
+ *
+ * When Browser Run is provisioned, set ENABLE_BROWSER_RUN=true and add:
+ *   [browser]
+ *   binding = "BROWSER"
  */
+import type { BrowserRunBinding } from "./integrations/browser.js";
+
 export type Env = {
   DB: D1Database;
   ARTIFACTS: R2Bucket;
   ASSETS?: Fetcher;
+  /** Cloudflare Browser Run binding — human-tester viewport snapshots. */
+  BROWSER?: BrowserRunBinding;
   APP_ENV: string;
   APP_ORIGIN: string;
   WEBAUTHN_RP_ID: string;

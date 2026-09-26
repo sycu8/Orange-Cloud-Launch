@@ -1,7 +1,12 @@
 import { brandProfileToCss, DEFAULT_QUOTAS, RULESET_VERSION } from "@oclaunch/shared";
 import { newId, sha256Hex } from "../lib/ids.js";
+import { reserveArtifactBytes } from "../lib/uploads.js";
 import { runDeterministicChecks } from "../integrations/deterministic.js";
-import { runBrowserReview } from "../integrations/browser.js";
+import {
+  runBrowserReview,
+  type BrowserRunBinding,
+  type BrowserReviewResult,
+} from "../integrations/browser.js";
 import { suggestFindings } from "../integrations/ai.js";
 import { buildAgentExport } from "../integrations/export.js";
 import { requestPatchPreview } from "../integrations/sandbox.js";
@@ -9,6 +14,7 @@ import { requestPatchPreview } from "../integrations/sandbox.js";
 type EnvLike = {
   DB: D1Database;
   ARTIFACTS: R2Bucket;
+  BROWSER?: BrowserRunBinding;
   ENABLE_BROWSER_RUN: string;
   ENABLE_WORKERS_AI: string;
   ENABLE_PATCH_PR: string;
@@ -138,20 +144,70 @@ async function handleReview(
   const fetchBlocked = deterministic.some((item) =>
     /blocked|credentials|not a valid|could not be checked/i.test(item.title),
   );
-  const browser = fetchBlocked
+  const browser: BrowserReviewResult = fetchBlocked
     ? {
-        status: "skipped" as const,
+        status: "skipped",
         message: "Release URL was not fetched.",
         sourceUrl: "",
+        routesVisited: [],
+        viewports: [],
+        captures: [],
+        findings: [],
+        workflows: [],
       }
-    : await runBrowserReview(env, release.source_url);
+    : await runBrowserReview(env, release.source_url, { allowLoopback });
   const suggestions = await suggestFindings(env, {
     sourceUrl: fetchBlocked ? "" : release.source_url,
     deterministic,
   });
 
+  const captureArtifactIds: Array<string | null> = [];
+  for (const capture of browser.captures) {
+    const artifactId = newId("art");
+    const reserved = await reserveArtifactBytes(
+      env.DB,
+      projectId,
+      artifactId,
+      capture.bytes.byteLength,
+    );
+    if (!reserved) {
+      captureArtifactIds.push(null);
+      continue;
+    }
+    const key = `projects/${projectId}/releases/${releaseId}/browser/${artifactId}-${capture.viewportLabel}.png`;
+    await env.ARTIFACTS.put(key, capture.bytes, {
+      httpMetadata: { contentType: capture.mimeType },
+      customMetadata: {
+        route: capture.route,
+        viewport: capture.viewportLabel,
+        pageTitle: capture.pageTitle ?? "",
+      },
+    });
+    const hash = await sha256Hex(Uint8Array.from(capture.bytes).buffer);
+    await env.DB.prepare(
+      `INSERT INTO artifacts (id, project_id, release_id, r2_key, sha256, mime_type, size_bytes, width, height, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        artifactId,
+        projectId,
+        releaseId,
+        key,
+        hash,
+        capture.mimeType,
+        capture.bytes.byteLength,
+        capture.width,
+        capture.height,
+        new Date().toISOString(),
+      )
+      .run();
+    captureArtifactIds.push(artifactId);
+  }
+
   const findingIds: string[] = [];
-  for (const f of [...deterministic, ...suggestions]) {
+  // Human outcomes stay separate: store automated notes after any prior human rows.
+  // Order: deterministic fetch → browser human-tester → model suggestions.
+  for (const f of [...deterministic, ...browser.findings, ...suggestions]) {
     const id = newId("fnd");
     findingIds.push(id);
     await env.DB.prepare(
@@ -175,13 +231,96 @@ async function handleReview(
         new Date().toISOString(),
       )
       .run();
+
+    const captureIndex =
+      "captureIndex" in f && typeof f.captureIndex === "number" ? f.captureIndex : null;
+    const evidenceId =
+      captureIndex != null ? captureArtifactIds[captureIndex] : undefined;
+    if (evidenceId) {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO finding_evidence (project_id, finding_id, artifact_id)
+         VALUES (?, ?, ?)`,
+      )
+        .bind(projectId, id, evidenceId)
+        .run();
+    }
+  }
+
+  let workflowArtifactId: string | null = null;
+  if (browser.workflows.length > 0) {
+    const workflowBody = JSON.stringify(
+      {
+        note: "Combined viewport snapshots as ordered first-use workflows. Not human outcomes. Bot challenges stop the path.",
+        sourceUrl: browser.sourceUrl,
+        workflows: browser.workflows.map((workflow) => ({
+          ...workflow,
+          steps: workflow.steps.map((step) => ({
+            ...step,
+            artifactId:
+              step.captureIndex != null ? (captureArtifactIds[step.captureIndex] ?? null) : null,
+          })),
+        })),
+      },
+      null,
+      2,
+    );
+    const workflowId = newId("art");
+    const reserved = await reserveArtifactBytes(
+      env.DB,
+      projectId,
+      workflowId,
+      workflowBody.length,
+    );
+    if (reserved) {
+      const key = `projects/${projectId}/releases/${releaseId}/browser/${workflowId}-workflow.json`;
+      await env.ARTIFACTS.put(key, workflowBody, {
+        httpMetadata: { contentType: "application/json" },
+      });
+      const hash = await sha256Hex(workflowBody);
+      await env.DB.prepare(
+        `INSERT INTO artifacts (id, project_id, release_id, r2_key, sha256, mime_type, size_bytes, created_at)
+         VALUES (?, ?, ?, ?, ?, 'application/json', ?, ?)`,
+      )
+        .bind(
+          workflowId,
+          projectId,
+          releaseId,
+          key,
+          hash,
+          workflowBody.length,
+          new Date().toISOString(),
+        )
+        .run();
+      workflowArtifactId = workflowId;
+    }
   }
 
   return {
     status: "completed",
     findingIds,
-    browser,
+    browser: {
+      status: browser.status,
+      message: browser.message,
+      sourceUrl: browser.sourceUrl,
+      routesVisited: browser.routesVisited,
+      viewports: browser.viewports,
+      captureCount: browser.captures.length,
+      findingCount: browser.findings.length,
+      artifactIds: captureArtifactIds.filter((id): id is string => Boolean(id)),
+      workflowArtifactId,
+      workflows: browser.workflows.map((workflow) => ({
+        name: workflow.name,
+        viewport: workflow.viewportLabel,
+        stopped: workflow.stopped,
+        steps: workflow.steps.map((step) => ({
+          step: step.step,
+          route: step.route,
+          outcome: step.outcome,
+        })),
+      })),
+    },
     deterministicCount: deterministic.length,
+    browserFindingCount: browser.findings.length,
     suggestionCount: suggestions.length,
   };
 }
@@ -325,9 +464,12 @@ async function handleReport(
     counts_by_provenance: byProvenance,
     previous_release: previous ?? null,
     untested_scope: [
-      "Cross-browser rendering beyond Chromium deterministic fetch",
+      "Cross-browser rendering beyond Chromium Browser Run",
       "Authenticated multi-step journeys",
       "Performance budgets",
+      ...(byProvenance.browser_observation
+        ? []
+        : ["Browser Run human-tester viewport snapshots were not captured for this release"]),
       ...(environment !== "production"
         ? ["Production live URL was not the human review target for this report"]
         : []),
