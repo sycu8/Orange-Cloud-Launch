@@ -192,16 +192,24 @@ jobs:
                   sys.exit(1)
               host = f"oclaunch-platform-staging.{subdomain}.workers.dev"
               origin = f"https://{host}"
-              text = text.replace(
-                  'APP_ORIGIN = "https://launch-staging.orangecloud.vn"',
-                  f'APP_ORIGIN = "{origin}"',
-                  1,
-              )
-              text = text.replace(
-                  'WEBAUTHN_RP_ID = "launch-staging.orangecloud.vn"',
-                  f'WEBAUTHN_RP_ID = "{host}"',
-                  1,
-              )
+              # Keep wrangler.toml in sync if the account workers.dev subdomain changes.
+              for old_host in (
+                  "oclaunch-platform-staging.sycu-lee.workers.dev",
+                  "launch-staging.orangecloud.vn",
+              ):
+                  text = text.replace(
+                      f'APP_ORIGIN = "https://{old_host}"',
+                      f'APP_ORIGIN = "{origin}"',
+                      1,
+                  )
+                  text = text.replace(
+                      f'WEBAUTHN_RP_ID = "{old_host}"',
+                      f'WEBAUTHN_RP_ID = "{host}"',
+                      1,
+                  )
+              if f'APP_ORIGIN = "{origin}"' not in text:
+                  print("workers/platform/wrangler.toml is missing a staging APP_ORIGIN to rewrite")
+                  sys.exit(1)
               print(f"Staging public URL: {origin}")
           path.write_text(text)
           print(f"Injected D1 database id for {env} from {source}")

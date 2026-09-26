@@ -25,6 +25,8 @@ export type Env = {
   BROWSER?: BrowserRunBinding;
   APP_ENV: string;
   APP_ORIGIN: string;
+  /** Optional comma-separated extra browser origins allowed for CSRF / WebAuthn. */
+  APP_ORIGINS_EXTRA?: string;
   WEBAUTHN_RP_ID: string;
   DEV_LOGIN_SECRET?: string;
   MAINTENANCE_SECRET?: string;

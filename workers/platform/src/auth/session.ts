@@ -89,8 +89,13 @@ export async function loadSession(
 export function allowedOrigins(env: {
   APP_ORIGIN: string;
   APP_ENV: string;
+  APP_ORIGINS_EXTRA?: string;
 }): string[] {
   const origins = new Set<string>([env.APP_ORIGIN]);
+  for (const extra of (env.APP_ORIGINS_EXTRA ?? "").split(",")) {
+    const trimmed = extra.trim();
+    if (trimmed) origins.add(trimmed.replace(/\/$/, ""));
+  }
   if (env.APP_ENV === "development") {
     // Vite (`npm run dev`) proxies /api to wrangler on :8787 while the page is on :5173.
     for (const host of ["localhost", "127.0.0.1"]) {
@@ -103,7 +108,7 @@ export function allowedOrigins(env: {
 }
 
 export function isAllowedOrigin(
-  env: { APP_ORIGIN: string; APP_ENV: string },
+  env: { APP_ORIGIN: string; APP_ENV: string; APP_ORIGINS_EXTRA?: string },
   origin: string | undefined,
   requestUrl: string,
 ): boolean {

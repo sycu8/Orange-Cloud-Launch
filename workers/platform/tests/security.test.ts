@@ -14,16 +14,29 @@ describe("auth origin allowlist", () => {
   const staging = {
     APP_ORIGIN: "https://oclaunch-platform-staging.sycu-lee.workers.dev",
     APP_ENV: "staging",
+    APP_ORIGINS_EXTRA: "https://launch.orangecloud.vn",
   };
   const local = {
     APP_ORIGIN: "http://localhost:8787",
     APP_ENV: "development",
   };
 
-  it("allows the configured APP_ORIGIN", () => {
-    expect(allowedOrigins(staging)).toEqual([staging.APP_ORIGIN]);
+  it("allows the configured APP_ORIGIN and APP_ORIGINS_EXTRA", () => {
+    expect(allowedOrigins(staging)).toEqual(
+      expect.arrayContaining([
+        staging.APP_ORIGIN,
+        "https://launch.orangecloud.vn",
+      ]),
+    );
     expect(
       isAllowedOrigin(staging, staging.APP_ORIGIN, `${staging.APP_ORIGIN}/api/auth/passkey/register/options`),
+    ).toBe(true);
+    expect(
+      isAllowedOrigin(
+        staging,
+        "https://launch.orangecloud.vn",
+        "https://launch.orangecloud.vn/api/auth/passkey/register/options",
+      ),
     ).toBe(true);
   });
 
