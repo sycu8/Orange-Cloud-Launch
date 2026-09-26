@@ -17,26 +17,35 @@ on:
         description: For production, type launch.orangecloud.vn. Leave empty for staging.
         type: string
         required: false
+  # workflow_dispatch is preferred. This push path exists because the
+  # integration token cannot call the Actions dispatch API. A push only
+  # deploys staging, and only when this workflow file changes.
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/deploy.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: oclaunch-deploy-${{ inputs.environment }}
+  group: oclaunch-deploy-${{ github.event_name == 'push' && 'staging' || inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.environment }}
+    name: Deploy ${{ github.event_name == 'push' && 'staging' || inputs.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Push events deploy staging only. Production still requires workflow_dispatch.
+      WRANGLER_ENV: ${{ github.event_name == 'push' && 'staging' || inputs.environment }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
 
       - name: Require a known environment
-        env:
-          WRANGLER_ENV: ${{ inputs.environment }}
         run: |
           case "$WRANGLER_ENV" in
             staging|production) ;;
@@ -81,7 +90,6 @@ jobs:
 
       - name: Inject D1 id and optional R2 bucket from secrets
         env:
-          WRANGLER_ENV: ${{ inputs.environment }}
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
         run: |
@@ -147,7 +155,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_ENV: ${{ inputs.environment }}
         run: |
           npx wrangler d1 migrations apply "oclaunch-${WRANGLER_ENV}" --env "$WRANGLER_ENV"
           npx wrangler deploy --env "$WRANGLER_ENV"
@@ -157,7 +164,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_ENV: ${{ inputs.environment }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
           GITHUB_WEBHOOK_SECRET: ${{ secrets.GITHUB_WEBHOOK_SECRET }}
