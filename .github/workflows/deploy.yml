@@ -80,25 +80,30 @@ jobs:
             echo "Missing GitHub Actions secret or variable: CLOUDFLARE_ACCOUNT_ID"
             missing=1
           fi
-          if [ -z "$CLOUDFLARE_D1_DATABASE_ID" ]; then
-            echo "Missing GitHub Actions secret: CLOUDFLARE_D1_DATABASE_ID"
-            missing=1
-          fi
           if [ "$missing" -ne 0 ]; then
             exit 1
+          fi
+          if [ -z "$CLOUDFLARE_D1_DATABASE_ID" ]; then
+            echo "CLOUDFLARE_D1_DATABASE_ID is not set; resolving the D1 database by name"
           fi
 
       - name: Inject D1 id and optional R2 bucket from secrets
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
         run: |
           python3 - <<'PY'
-          import os, pathlib, re, sys
+          import json, os, pathlib, re, sys, urllib.error, urllib.parse, urllib.request
           env = os.environ["WRANGLER_ENV"]
           placeholders = {
               "staging": "REPLACE_WITH_STAGING_DATABASE_ID",
               "production": "REPLACE_WITH_PRODUCTION_DATABASE_ID",
+          }
+          database_names = {
+              "staging": "oclaunch-staging",
+              "production": "oclaunch-production",
           }
           default_buckets = {
               "staging": "oclaunch-artifacts-staging",
@@ -108,11 +113,35 @@ jobs:
               print("Unsupported environment")
               sys.exit(1)
           database_id = os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
+          source = "CLOUDFLARE_D1_DATABASE_ID"
           if not database_id:
-              print("Missing GitHub Actions secret: CLOUDFLARE_D1_DATABASE_ID")
-              sys.exit(1)
+              db_name = database_names[env]
+              account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+              token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+              if not account or not token:
+                  print("Missing GitHub Actions secret: CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID")
+                  sys.exit(1)
+              url = (
+                  "https://api.cloudflare.com/client/v4/accounts/"
+                  + urllib.parse.quote(account)
+                  + "/d1/database?name="
+                  + urllib.parse.quote(db_name)
+              )
+              req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token})
+              try:
+                  with urllib.request.urlopen(req) as resp:
+                      payload = json.load(resp)
+              except urllib.error.HTTPError as exc:
+                  print(f"Cloudflare D1 list failed for {db_name} with HTTP {exc.code}")
+                  sys.exit(1)
+              rows = [row for row in (payload.get("result") or []) if row.get("name") == db_name]
+              if len(rows) != 1 or not rows[0].get("uuid"):
+                  print(f"Could not resolve one D1 database named {db_name}")
+                  sys.exit(1)
+              database_id = str(rows[0]["uuid"]).strip()
+              source = f"Cloudflare API name {db_name}"
           if not re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", database_id):
-              print("GitHub Actions secret CLOUDFLARE_D1_DATABASE_ID is not a D1 database UUID")
+              print(f"D1 database id from {source} is not a UUID")
               sys.exit(1)
           path = pathlib.Path("workers/platform/wrangler.toml")
           text = path.read_text()
@@ -135,7 +164,7 @@ jobs:
           else:
               print("CLOUDFLARE_R2_BUCKET_NAME is not set; using the bucket name in wrangler.toml")
           path.write_text(text)
-          print(f"Injected D1 database id for {env} from CLOUDFLARE_D1_DATABASE_ID")
+          print(f"Injected D1 database id for {env} from {source}")
           PY
 
       - name: Set up Node
@@ -156,7 +185,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npx wrangler d1 migrations apply "oclaunch-${WRANGLER_ENV}" --env "$WRANGLER_ENV"
+          npx wrangler d1 migrations apply "oclaunch-${WRANGLER_ENV}" --remote --env "$WRANGLER_ENV"
           npx wrangler deploy --env "$WRANGLER_ENV"
 
       - name: Sync optional Worker secrets
