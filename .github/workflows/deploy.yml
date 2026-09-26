@@ -163,6 +163,41 @@ jobs:
               print("Injected R2 bucket name from CLOUDFLARE_R2_BUCKET_NAME")
           else:
               print("CLOUDFLARE_R2_BUCKET_NAME is not set; using the bucket name in wrangler.toml")
+          if env == "staging":
+              account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+              token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+              if not account or not token:
+                  print("Missing GitHub Actions secret: CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID")
+                  sys.exit(1)
+              sub_url = (
+                  "https://api.cloudflare.com/client/v4/accounts/"
+                  + urllib.parse.quote(account)
+                  + "/workers/subdomain"
+              )
+              sub_req = urllib.request.Request(sub_url, headers={"Authorization": "Bearer " + token})
+              try:
+                  with urllib.request.urlopen(sub_req) as resp:
+                      sub_payload = json.load(resp)
+              except urllib.error.HTTPError as exc:
+                  print(f"Cloudflare workers subdomain lookup failed with HTTP {exc.code}")
+                  sys.exit(1)
+              subdomain = str((sub_payload.get("result") or {}).get("subdomain") or "").strip()
+              if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", subdomain):
+                  print("Cloudflare account workers.dev subdomain was not returned")
+                  sys.exit(1)
+              host = f"oclaunch-platform-staging.{subdomain}.workers.dev"
+              origin = f"https://{host}"
+              text = text.replace(
+                  'APP_ORIGIN = "https://launch-staging.orangecloud.vn"',
+                  f'APP_ORIGIN = "{origin}"',
+                  1,
+              )
+              text = text.replace(
+                  'WEBAUTHN_RP_ID = "launch-staging.orangecloud.vn"',
+                  f'WEBAUTHN_RP_ID = "{host}"',
+                  1,
+              )
+              print(f"Staging public URL: {origin}")
           path.write_text(text)
           print(f"Injected D1 database id for {env} from {source}")
           PY
@@ -218,7 +253,16 @@ jobs:
             printf '%s' "$value" | npx wrangler secret put "$name" --env "$WRANGLER_ENV"
             echo "Updated Worker secret: $name"
           }
-          sync_secret SESSION_SECRET
+          if [ "$WRANGLER_ENV" = "staging" ]; then
+            if npx wrangler secret list --env staging | grep -q 'SESSION_SECRET'; then
+              echo "Worker secret SESSION_SECRET already set"
+            else
+              openssl rand -base64 48 | tr -d '\n' | npx wrangler secret put SESSION_SECRET --env staging
+              echo "Set Worker secret SESSION_SECRET"
+            fi
+          else
+            sync_secret SESSION_SECRET
+          fi
           sync_secret GITHUB_APP_ID
           sync_secret GITHUB_WEBHOOK_SECRET
           sync_secret MAINTENANCE_SECRET

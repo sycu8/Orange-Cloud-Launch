@@ -43,7 +43,7 @@ RULESET_VERSION = "1.0.0"
 
 [env.staging]
 name = "oclaunch-platform-staging"
-workers_dev = false
+workers_dev = true
 [env.staging.vars]
 APP_ENV = "staging"
 APP_ORIGIN = "https://launch-staging.orangecloud.vn"
