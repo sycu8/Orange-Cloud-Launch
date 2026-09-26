@@ -1,0 +1,21 @@
+:root {
+  --oc-ink: #17252B;
+  --oc-canvas: #FAF8F5;
+  --oc-surface: #FFFFFF;
+  --oc-action: #C2410C;
+  --oc-accent: #FF8A4C;
+  --oc-orangeTint: #FFF0E7;
+  --oc-positive: #0F766E;
+  --oc-positiveTint: #E8F4F1;
+  --oc-muted: #59676D;
+  --oc-border: #DFE4E2;
+  --oc-inputBorder: #84918F;
+  --oc-focus: #2563EB;
+  --oc-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --oc-font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --oc-radius-control: 10px;
+  --oc-radius-card: 16px;
+  --oc-control-min-height: 44px;
+}
+:focus-visible { outline: 2px solid var(--oc-focus); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

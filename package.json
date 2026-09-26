@@ -1,0 +1,27 @@
+{
+  "name": "oclaunch",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OCLaunch — community review-to-improvement workspace for solo founders",
+  "workspaces": [
+    "apps/web",
+    "workers/platform",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @oclaunch/shared && concurrently -n web,api -c orange,teal \"npm run dev -w @oclaunch/web\" \"npm run dev -w @oclaunch/platform\"",
+    "build": "npm run build -w @oclaunch/shared && npm run build -w @oclaunch/web && npm run build -w @oclaunch/platform",
+    "typecheck": "npm run typecheck -w @oclaunch/shared && npm run typecheck -w @oclaunch/web && npm run typecheck -w @oclaunch/platform",
+    "test": "npm run test -w @oclaunch/shared && npm run test -w @oclaunch/platform && npm run test -w @oclaunch/web",
+    "lint": "npm run typecheck",
+    "db:migrate:local": "npm run db:migrate:local -w @oclaunch/platform",
+    "cf-typegen": "npm run cf-typegen -w @oclaunch/platform"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
