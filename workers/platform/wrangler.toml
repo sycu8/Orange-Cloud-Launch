@@ -49,17 +49,15 @@ remote = true
 [env.staging]
 name = "oclaunch-platform-staging"
 workers_dev = true
-# Keep a single stable hostname for WebAuthn RP ID / APP_ORIGIN (no version preview hosts).
+# Prefer the custom domain for WebAuthn; disable version preview hosts.
 preview_urls = false
-# Custom domain currently routes to this staging Worker; production Worker is not deployed yet.
-routes = [{ pattern = "launch.orangecloud.vn", custom_domain = true }]
+routes = [{ pattern = "launch-staging.orangecloud.vn", custom_domain = true }]
 [env.staging.vars]
 APP_ENV = "staging"
-# Preview / primary staging host (workers.dev).
-APP_ORIGIN = "https://oclaunch-platform-staging.sycu-lee.workers.dev"
-WEBAUTHN_RP_ID = "oclaunch-platform-staging.sycu-lee.workers.dev"
-# launch.orangecloud.vn also serves this Worker today — allow passkeys from that origin too.
-APP_ORIGINS_EXTRA = "https://launch.orangecloud.vn"
+APP_ORIGIN = "https://launch-staging.orangecloud.vn"
+WEBAUTHN_RP_ID = "launch-staging.orangecloud.vn"
+# Optional: workers.dev still serves this Worker for emergency access.
+APP_ORIGINS_EXTRA = "https://oclaunch-platform-staging.sycu-lee.workers.dev"
 ENABLE_PATCH_PR = "false"
 ENABLE_PROJECT_DOMAINS = "false"
 ENABLE_BROWSER_RUN = "true"
@@ -79,9 +77,9 @@ bucket_name = "oclaunch-artifacts-staging"
 
 [env.production]
 name = "oclaunch-platform-production"
-# workers.dev only. launch.orangecloud.vn stays on the staging Worker until it is detached.
-workers_dev = true
-# routes = [{ pattern = "launch.orangecloud.vn", custom_domain = true }]
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "launch.orangecloud.vn", custom_domain = true }]
 [env.production.vars]
 APP_ENV = "production"
 APP_ORIGIN = "https://launch.orangecloud.vn"

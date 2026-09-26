@@ -12,9 +12,9 @@ import { randomToken } from "../src/lib/ids.js";
 
 describe("auth origin allowlist", () => {
   const staging = {
-    APP_ORIGIN: "https://oclaunch-platform-staging.sycu-lee.workers.dev",
+    APP_ORIGIN: "https://launch-staging.orangecloud.vn",
     APP_ENV: "staging",
-    APP_ORIGINS_EXTRA: "https://launch.orangecloud.vn",
+    APP_ORIGINS_EXTRA: "https://oclaunch-platform-staging.sycu-lee.workers.dev",
   };
   const local = {
     APP_ORIGIN: "http://localhost:8787",
@@ -25,7 +25,7 @@ describe("auth origin allowlist", () => {
     expect(allowedOrigins(staging)).toEqual(
       expect.arrayContaining([
         staging.APP_ORIGIN,
-        "https://launch.orangecloud.vn",
+        "https://oclaunch-platform-staging.sycu-lee.workers.dev",
       ]),
     );
     expect(
@@ -34,8 +34,8 @@ describe("auth origin allowlist", () => {
     expect(
       isAllowedOrigin(
         staging,
-        "https://launch.orangecloud.vn",
-        "https://launch.orangecloud.vn/api/auth/passkey/register/options",
+        "https://oclaunch-platform-staging.sycu-lee.workers.dev",
+        "https://oclaunch-platform-staging.sycu-lee.workers.dev/api/auth/passkey/register/options",
       ),
     ).toBe(true);
   });
