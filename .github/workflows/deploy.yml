@@ -33,6 +33,7 @@ on:
       - apps/web/**
       - packages/shared/**
       - migrations/**
+      - scripts/**
 
 permissions:
   contents: read
