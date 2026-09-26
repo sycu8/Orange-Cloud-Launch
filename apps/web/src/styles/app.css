@@ -37,8 +37,13 @@ body {
     var(--oc-canvas);
 }
 
-a {
+/* Text links only — do not recolor buttons nested inside <Link>/<a>. */
+a:not(:has(button, .oc-btn)) {
   color: var(--oc-action);
+}
+a:has(button, .oc-btn) {
+  color: inherit;
+  text-decoration: none;
 }
 
 ::selection {

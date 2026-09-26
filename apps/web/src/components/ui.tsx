@@ -8,13 +8,13 @@ export function Button({
   variant?: "primary" | "secondary" | "ghost";
 }) {
   const base =
-    "inline-flex min-h-[44px] items-center justify-center rounded-[10px] px-4 text-[15px] font-semibold transition-opacity duration-160 disabled:opacity-50";
+    "oc-btn inline-flex min-h-[44px] items-center justify-center rounded-[10px] px-4 text-[15px] font-semibold transition-opacity duration-160 disabled:opacity-50";
   const styles = {
-    primary: "bg-action text-white hover:opacity-95",
+    primary: "bg-action text-canvas hover:opacity-95",
     secondary: "bg-orange-tint text-ink border border-border hover:opacity-95",
     ghost: "bg-transparent text-ink hover:bg-orange-tint",
   }[variant];
-  return <button className={`${base} ${styles} ${className}`} {...props} />;
+  return <button type={props.type ?? "button"} className={`${base} ${styles} ${className}`} {...props} />;
 }
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
