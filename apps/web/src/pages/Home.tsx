@@ -7,17 +7,17 @@ export function HomePage() {
   return (
     <div>
       {/* One composition: brand + headline + CTAs over a full-bleed visual plane */}
-      <section className="relative overflow-hidden border-b border-border">
+      <section className="relative overflow-hidden border-b border-border bg-ink">
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden
           style={{
             background:
-              "radial-gradient(900px 480px at 85% 20%, rgba(255,138,76,0.22), transparent 55%), radial-gradient(700px 420px at 10% 90%, rgba(15,118,110,0.12), transparent 50%), linear-gradient(180deg, #17252B 0%, #1f3339 55%, #FAF8F5 55%)",
+              "radial-gradient(900px 480px at 85% 15%, rgba(255,138,76,0.22), transparent 55%), radial-gradient(700px 420px at 8% 85%, rgba(15,118,110,0.14), transparent 50%)",
           }}
         />
-        <div className="relative mx-auto grid max-w-6xl gap-8 px-4 pb-12 pt-8 sm:pb-16 sm:pt-10 lg:grid-cols-2 lg:items-end lg:gap-12 lg:pb-20 lg:pt-14">
-          <div className="animate-rise text-canvas lg:pb-6">
+        <div className="relative mx-auto grid max-w-6xl gap-8 px-4 pb-14 pt-8 sm:pb-16 sm:pt-10 lg:grid-cols-2 lg:items-center lg:gap-12 lg:pb-20 lg:pt-14">
+          <div className="animate-rise text-canvas">
             <div className="mb-6 flex items-center gap-3">
               <img
                 src={iconUrl}
@@ -48,14 +48,14 @@ export function HomePage() {
           </div>
 
           <div
-            className="animate-rise-delay relative min-h-[280px] overflow-hidden border border-[#2a3d44] bg-ink/80 text-canvas backdrop-blur-sm sm:min-h-[340px] lg:min-h-[380px] lg:rounded-[24px]"
+            className="animate-rise-delay relative min-h-[280px] overflow-hidden rounded-[16px] border border-[#2a3d44] bg-[#132024] text-canvas sm:min-h-[340px] lg:min-h-[380px] lg:rounded-[24px]"
             aria-label="Labeled product example of the review loop"
           >
             <div className="relative flex h-full flex-col justify-between p-5 sm:p-7">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
                 Example loop · fictional demo product
               </p>
-              <ol className="mt-6 space-y-3.5 text-sm sm:mt-0 sm:space-y-4 sm:text-base">
+              <ol className="mt-6 space-y-3.5 text-sm sm:mt-8 sm:space-y-4 sm:text-base">
                 <li className="border-l-2 border-accent pl-3">
                   <span className="font-semibold text-accent">Capture release</span>
                   <p className="text-[#DFE4E2]">Freeze a URL, viewport, and ruleset version.</p>

@@ -93,10 +93,10 @@ export function AppShell() {
               variant="ghost"
               className="md:hidden"
               aria-expanded={menuOpen}
-              aria-label="Open menu"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
               onClick={() => setMenuOpen((o) => !o)}
             >
-              Menu
+              {menuOpen ? "Close" : "Menu"}
             </Button>
             <Button variant="ghost" className="hidden md:inline-flex" onClick={() => void logout()}>
               Log out
