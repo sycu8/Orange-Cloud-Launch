@@ -221,12 +221,35 @@ function absoluteRouteUrl(sourceUrl: string, route: string): string {
   return new URL(route, sourceUrl).toString();
 }
 
+/** Honest bot User-Agent — OCLaunch does not spoof a human browser. */
+export const OCLAUNCH_BROWSER_UA =
+  "OCLaunch-HumanTester/1.0 (+https://launch.orangecloud.vn; Browser Run)";
+
+/**
+ * Detect bot-challenge / WAF interstitial pages. OCLaunch never tries to bypass
+ * these — founders must allowlist Browser Run on zones they control, or review
+ * a URL that is intentionally open to automated Chromium.
+ */
+export function looksLikeBotChallenge(input: {
+  pageTitle?: string;
+  markdown?: string;
+  content?: string;
+}): boolean {
+  const sample = `${input.pageTitle ?? ""}\n${(input.markdown ?? "").slice(0, 2_000)}\n${(input.content ?? "").slice(0, 4_000)}`;
+  return (
+    /just a moment|attention required|checking your browser|cf-browser-verification|cf-challenge|challenge-platform|enable javascript and cookies|verify you are human|are you a robot|access denied|unusual traffic|bot detection|security check/i.test(
+      sample,
+    ) || /cdn-cgi\/challenge-platform/i.test(sample)
+  );
+}
+
 /** Derive concrete observations from a rendered snapshot — never human_observation. */
 export function discoverFromSnapshot(input: {
   route: string;
   viewportLabel: string;
   captureIndex: number;
   markdown?: string;
+  content?: string;
   accessibilityTree?: A11yNode;
   pageTitle?: string;
   httpStatus?: number;
@@ -235,6 +258,29 @@ export function discoverFromSnapshot(input: {
   const md = (input.markdown ?? "").trim();
   const title = (input.pageTitle ?? "").trim();
   const routeLabel = `${input.route} @ ${input.viewportLabel}`;
+
+  if (
+    looksLikeBotChallenge({
+      pageTitle: title,
+      markdown: md,
+      content: input.content,
+    })
+  ) {
+    findings.push(
+      finding({
+        category: "Access",
+        severity: "high",
+        confidence: "high",
+        title: `Bot protection blocked Browser Run (${routeLabel})`,
+        body: "Browser Run reached a challenge or WAF interstitial instead of the product UI. OCLaunch does not bypass bot protection. On a zone you control, allowlist Cloudflare Browser Run (Quick Actions bot detection ID 119853733) or capture a review URL that is open to automated Chromium. Human reviewers remain the path when automation cannot enter.",
+        acceptanceCriterion:
+          "Release URL is reachable by Cloudflare Browser Run without a bot challenge, or evidence comes from a human review.",
+        captureIndex: input.captureIndex,
+      }),
+    );
+    // Do not pile on empty-page / missing-heading noise for challenge walls.
+    return findings;
+  }
 
   if (input.httpStatus != null && input.httpStatus >= 400) {
     findings.push(
@@ -381,9 +427,8 @@ async function captureSnapshot(
     formats: ["screenshot", "markdown", "accessibilityTree"],
     viewport: { width: viewport.width, height: viewport.height },
     gotoOptions: { waitUntil: "networkidle2", timeout: 30_000 },
-    // Identify as a product tester session, not a silent scraper.
-    userAgent:
-      "Mozilla/5.0 (compatible; OCLaunch-HumanTester/1.0; +https://launch.orangecloud.vn) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    // Transparent bot identity — never spoof a consumer browser to evade WAF.
+    userAgent: OCLAUNCH_BROWSER_UA,
   });
   const payload = unwrapResult(await coercePayload(raw));
   const bytes = asBytes(payload.screenshot);
@@ -505,6 +550,7 @@ export async function runBrowserReview(
             viewportLabel: viewport.label,
             captureIndex,
             markdown: payload.markdown,
+            content: payload.content,
             accessibilityTree: payload.accessibilityTree,
             pageTitle,
             httpStatus: payload.meta?.status,

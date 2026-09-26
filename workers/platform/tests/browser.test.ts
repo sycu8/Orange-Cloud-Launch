@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   discoverFromSnapshot,
+  looksLikeBotChallenge,
   runBrowserReview,
   selectHumanTesterRoutes,
 } from "../src/integrations/browser.js";
@@ -41,7 +42,38 @@ describe("selectHumanTesterRoutes", () => {
   });
 });
 
+describe("looksLikeBotChallenge", () => {
+  it("detects Cloudflare-style interstitials", () => {
+    expect(
+      looksLikeBotChallenge({
+        pageTitle: "Just a moment...",
+        markdown: "Checking your browser before accessing the site.",
+      }),
+    ).toBe(true);
+    expect(
+      looksLikeBotChallenge({
+        pageTitle: "Welcome",
+        markdown: "# Ship your next release",
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("discoverFromSnapshot", () => {
+  it("reports bot protection without suggesting bypass", () => {
+    const findings = discoverFromSnapshot({
+      route: "/",
+      viewportLabel: "1280x800",
+      captureIndex: 0,
+      pageTitle: "Just a moment...",
+      markdown: "Checking your browser before accessing example.com.",
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.category).toBe("Access");
+    expect(findings[0]?.body).toMatch(/does not bypass/i);
+    expect(findings[0]?.body).toMatch(/allowlist/i);
+  });
+
   it("never uses human_observation provenance", () => {
     const findings = discoverFromSnapshot({
       route: "/",

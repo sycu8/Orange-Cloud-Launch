@@ -11,7 +11,11 @@ export function IntegrationsPage() {
 
   const rows = [
     ["GitHub App", flags?.github, "Selected-repo broker for draft PRs"],
-    ["Browser Run", flags?.browserRun, "Human-tester viewport snapshots and route discovery"],
+    [
+      "Browser Run",
+      flags?.browserRun,
+      "Human-tester snapshots (no WAF bypass — allowlist bot ID 119853733 on zones you control)",
+    ],
     ["Workers AI", flags?.workersAi, "Labeled model suggestions only"],
     ["Sandbox patch/PR", flags?.patchPr, "Isolated build + draft PR path"],
     ["Project domains", flags?.projectDomains, "Verified <slug>.orangecloud.vn gateway"],
