@@ -91,7 +91,8 @@ projectRoutes.get("/projects/:id", async (c) => {
     .first();
   if (!project) return jsonErr(c, "NOT_FOUND", "Project not found", 404);
   const releases = await c.env.DB.prepare(
-    `SELECT id, label, source_url, commit_sha, captured_at FROM releases
+    `SELECT id, label, source_url, commit_sha, captured_at, environment, reviewed_url
+     FROM releases
      WHERE project_id = ? ORDER BY captured_at DESC LIMIT 10`,
   )
     .bind(id)

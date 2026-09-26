@@ -59,12 +59,34 @@ export function ChangeDetailPage() {
         : null;
       setMessage(
         parsed?.artifactId
-          ? "Agent export ready — download the task bundle and apply it in your coding agent."
+          ? "Agent export ready — copy or download, then paste into your coding agent. Draft PR stays integration_not_configured."
           : "Export job finished",
       );
       await load();
+      if (parsed?.artifactId) {
+        await copyExport();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
+    }
+  }
+
+  async function copyExport() {
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${id}/changes/${changeId}/export-download`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error("Export not ready yet — generate it first.");
+      }
+      const text = await res.text();
+      await navigator.clipboard.writeText(text);
+      setMessage(
+        "Agent export copied. It forbids deleting or rewriting tests to make them pass.",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Copy failed");
     }
   }
 
@@ -154,26 +176,31 @@ export function ChangeDetailPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          <h3 className="font-semibold">Path 1 — coding agent</h3>
+          <h3 className="font-semibold">Shipping contract — coding agent export</h3>
           <p className="text-sm text-muted">
-            Export accepted findings, brand tokens, and acceptance criteria. Do not invent filenames
-            from a URL-only scan.
+            Primary path while Sandbox/GitHub draft PR is not configured. Bundle includes findings,
+            brand tokens, and a ban on deleting or rewriting tests to make them pass.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void exportBundle()}>Export for coding agent</Button>
+            <Button onClick={() => void exportBundle()}>Generate &amp; copy agent export</Button>
             {changeSet.export_artifact_id ? (
-              <a href={`/api/projects/${id}/changes/${changeId}/export-download`}>
-                <Button variant="secondary">Download bundle</Button>
-              </a>
+              <>
+                <Button variant="secondary" onClick={() => void copyExport()}>
+                  Copy export again
+                </Button>
+                <a href={`/api/projects/${id}/changes/${changeId}/export-download`}>
+                  <Button variant="ghost">Download JSON</Button>
+                </a>
+              </>
             ) : null}
           </div>
 
-          <h3 className="pt-4 font-semibold">Path 2 — sandbox preview / draft PR</h3>
-          <Notice title="Integration not configured" tone="neutral">
-            Cloudflare Sandbox + GitHub App credentials are required. Until then this path stays
-            honest as integration_not_configured.
+          <h3 className="pt-4 font-semibold">Sandbox preview / draft PR</h3>
+          <Notice title="integration_not_configured" tone="neutral">
+            Cloudflare Sandbox + GitHub App credentials are required. Export stays the shipping
+            contract until then — this button will not fake a PR.
           </Notice>
-          <Button variant="secondary" onClick={() => void requestBuild()}>
+          <Button variant="ghost" onClick={() => void requestBuild()}>
             Request preview / draft PR
           </Button>
           {changeSet.preview_url || changeSet.pr_url ? (

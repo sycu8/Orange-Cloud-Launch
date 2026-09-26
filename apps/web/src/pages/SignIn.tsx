@@ -117,11 +117,20 @@ export function SignInPage() {
           <Label>Display name</Label>
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={busy} onClick={() => void registerPasskey()}>
+        <Notice title="Local development" tone="action">
+          Fastest path on this machine: continue without a hardware authenticator. Disabled when{" "}
+          <code>APP_ENV=production</code>.
+          <div className="mt-3">
+            <Button disabled={busy} onClick={() => void devLogin()}>
+              Continue as local founder
+            </Button>
+          </div>
+        </Notice>
+        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+          <Button variant="secondary" disabled={busy} onClick={() => void registerPasskey()}>
             Create passkey
           </Button>
-          <Button variant="secondary" disabled={busy} onClick={() => void loginPasskey()}>
+          <Button variant="ghost" disabled={busy} onClick={() => void loginPasskey()}>
             Sign in with passkey
           </Button>
         </div>
@@ -136,15 +145,6 @@ export function SignInPage() {
             Redeem recovery code
           </Button>
         </div>
-        <Notice title="Local development login" tone="action">
-          Labeled bypass for environments without a hardware authenticator. Disabled when{" "}
-          <code>APP_ENV=production</code>.
-          <div className="mt-3">
-            <Button variant="ghost" disabled={busy} onClick={() => void devLogin()}>
-              Continue as local founder
-            </Button>
-          </div>
-        </Notice>
         {error ? (
           <Notice title="Could not complete sign-in" tone="danger">
             {error}

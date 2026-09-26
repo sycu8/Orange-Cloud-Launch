@@ -100,26 +100,6 @@ export function ChangesPage() {
     }
   }
 
-  async function requestBuild(changeId: string) {
-    try {
-      const res = await api<{ job: { result_json?: string } }>(
-        `/api/projects/${id}/changes/${changeId}/build`,
-        { method: "POST", body: "{}" },
-      );
-      const parsed = res.job.result_json
-        ? (JSON.parse(res.job.result_json) as { status?: string; message?: string })
-        : null;
-      if (parsed?.status === "integration_not_configured") {
-        setError(parsed.message ?? "Integration not configured");
-      } else {
-        setMessage("Build requested");
-      }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
-    }
-  }
-
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <div>
@@ -195,15 +175,9 @@ export function ChangesPage() {
                   <Link to={`/app/projects/${id}/changes/${cs.id}`}>
                     <Button>Open change studio</Button>
                   </Link>
-                  <Button variant="secondary" onClick={() => void exportBundle(cs.id)}>
-                    Export for coding agent
+                  <Button variant="ghost" onClick={() => void exportBundle(cs.id)}>
+                    Quick export
                   </Button>
-                  {cs.export_artifact_id ? (
-                    <a href={`/api/projects/${id}/changes/${cs.id}/export-download`}>
-                      <Button variant="ghost">Download bundle</Button>
-                    </a>
-                  ) : null}
-                  <Button onClick={() => void requestBuild(cs.id)}>Preview / draft PR</Button>
                 </div>
               </li>
             ))}

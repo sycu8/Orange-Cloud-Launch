@@ -36,7 +36,45 @@ export const FINDING_CATEGORIES = [
   "First-use experience",
   "Accessibility",
   "Release presentation",
+  "Access",
+  "Regression",
 ] as const;
+
+/** Ready missions that catch the failure modes vibe-coded apps hit in production. */
+export const DANGEROUS_PATH_MISSIONS = [
+  {
+    title: "Primary task in a private window",
+    instructions:
+      "Open the release URL in a private/incognito window as a new user. Complete the primary task without help. Note where you get stuck.",
+    topicTags: ["first-use", "private-window"],
+  },
+  {
+    title: "Protected page while logged out",
+    instructions:
+      "Stay logged out. Try to open a page that should require sign-in. Record whether you see protected data, a useful empty state, or a broken redirect.",
+    topicTags: ["access", "logged-out"],
+  },
+  {
+    title: "Another account’s data",
+    instructions:
+      "If you can create two accounts (or use two browsers), sign in as user A, note an item id, then as user B try to open or edit A’s item by URL. Report any data you should not see.",
+    topicTags: ["access", "tenancy"],
+  },
+  {
+    title: "Primary task at phone width",
+    instructions:
+      "Resize to about 390px wide (or use a phone). Complete the same primary task. Note anything below the fold, clipped, or untappable.",
+    topicTags: ["mobile", "first-use"],
+  },
+  {
+    title: "Empty state and failed save",
+    instructions:
+      "Trigger an empty list/state and a failed save (invalid input or offline if possible). Confirm errors are visible and nothing looks silently successful.",
+    topicTags: ["errors", "empty-state"],
+  },
+] as const;
+
+export const RELEASE_ENVIRONMENTS = ["localhost", "preview", "production"] as const;
 
 export const DEFAULT_QUOTAS = {
   projectsPerAccount: 3,

@@ -34,10 +34,16 @@ function buildLoopSteps(id: string, data: ProjectDetail): LoopStep[] {
     },
     {
       key: "review",
-      label: "Request a focused review",
-      done: loop.open_missions > 0 || loop.open_findings + loop.accepted_findings + loop.verified_findings > 0,
-      href: `/app/projects/${id}/missions`,
-      cta: "Open reviews",
+      label: "Collect evidence (review or founder note)",
+      done:
+        loop.open_missions > 0 ||
+        loop.open_findings +
+          loop.accepted_findings +
+          loop.in_progress_findings +
+          loop.verified_findings >
+          0,
+      href: latest ? `/app/projects/${id}/releases/${latest.id}` : `/app/projects/${id}/missions`,
+      cta: latest ? "Open release" : "Open reviews",
     },
     {
       key: "triage",
@@ -56,9 +62,9 @@ function buildLoopSteps(id: string, data: ProjectDetail): LoopStep[] {
     {
       key: "verify",
       label: "Mark implemented and verify live",
-      done: loop.verified_findings > 0 || loop.implemented_changes > 0,
+      done: loop.verified_findings > 0,
       href: latest ? `/app/projects/${id}/releases/${latest.id}` : `/app/projects/${id}/changes`,
-      cta: "Verify findings",
+      cta: loop.implemented_changes > 0 ? "Verify on release" : "Verify findings",
     },
     {
       key: "report",
@@ -78,6 +84,10 @@ export function ProjectOverviewPage() {
   }>();
   const [label, setLabel] = useState("Release 1");
   const [sourceUrl, setSourceUrl] = useState(data.project.live_url ?? "");
+  const [reviewedUrl, setReviewedUrl] = useState(data.project.live_url ?? "");
+  const [environment, setEnvironment] = useState<"localhost" | "preview" | "production">(
+    "preview",
+  );
   const [commitSha, setCommitSha] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,13 +99,23 @@ export function ProjectOverviewPage() {
     e.preventDefault();
     setError(null);
     try {
-      const rel = await api<{ id: string }>(`/api/projects/${id}/releases`, {
-        method: "POST",
-        body: JSON.stringify({ label, sourceUrl, commitSha: commitSha || undefined }),
-      });
-      setMessage(`Release captured. Open it to run checks or create a mission.`);
+      const rel = await api<{ id: string; defaultMissions?: number }>(
+        `/api/projects/${id}/releases`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            label,
+            sourceUrl,
+            reviewedUrl: reviewedUrl || sourceUrl,
+            environment,
+            commitSha: commitSha || undefined,
+          }),
+        },
+      );
+      setMessage(
+        `Release captured with ${rel.defaultMissions ?? 5} dangerous-path missions. Invite reviewers — could not complete is a real review.`,
+      );
       await reload();
-      void rel;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
     }
@@ -134,6 +154,8 @@ export function ProjectOverviewPage() {
           <h2 className="text-xl font-semibold">Guided improvement loop</h2>
           <p className="mt-1 text-sm text-muted">
             Next: <span className="font-semibold text-action">{nextStep.label}</span>
+            {" — "}solo founders can finish without a second account by logging a note or running
+            automated checks on a release.
           </p>
           <ol className="mt-4 space-y-2">
             {steps.map((step, index) => (
@@ -176,12 +198,20 @@ export function ProjectOverviewPage() {
               <p className="text-sm text-muted">Latest release</p>
               <p className="text-lg font-semibold">{latest.label}</p>
               <p className="truncate text-sm text-muted">{latest.source_url}</p>
+              <p className="mt-1 text-xs font-semibold text-muted">
+                Tried on {latest.environment ?? "preview"}
+                {latest.reviewed_url ? ` · ${latest.reviewed_url}` : ""}
+                {latest.commit_sha ? ` · ${latest.commit_sha}` : ""}
+              </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link to={`/app/projects/${id}/releases/${latest.id}`}>
                   <Button>Open release workspace</Button>
                 </Link>
-                <Button variant="secondary" onClick={() => void runAutomated(latest.id)}>
-                  Run automated review
+                <Link to={`/app/projects/${id}/missions`}>
+                  <Button variant="secondary">Share review missions</Button>
+                </Link>
+                <Button variant="ghost" onClick={() => void runAutomated(latest.id)}>
+                  Run automated checks
                 </Button>
               </div>
             </div>
@@ -204,21 +234,51 @@ export function ProjectOverviewPage() {
       </div>
       <form onSubmit={(e) => void addRelease(e)} className="space-y-3 rounded-[16px] border border-border bg-surface p-5">
         <h2 className="text-lg font-semibold">Capture release</h2>
+        <p className="text-sm text-muted">
+          Freezes five dangerous-path missions automatically. Record where a human will try it —
+          preview success is not production proof.
+        </p>
         <div>
           <Label>Label</Label>
           <Input value={label} onChange={(e) => setLabel(e.target.value)} required />
         </div>
         <div>
-          <Label>Source URL</Label>
+          <Label>Source URL (frozen snapshot)</Label>
           <Input
             type="url"
             value={sourceUrl}
-            onChange={(e) => setSourceUrl(e.target.value)}
+            onChange={(e) => {
+              setSourceUrl(e.target.value);
+              if (!reviewedUrl || reviewedUrl === sourceUrl) setReviewedUrl(e.target.value);
+            }}
             required
           />
         </div>
         <div>
-          <Label>Commit SHA (optional)</Label>
+          <Label>Where a human will try it</Label>
+          <select
+            className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
+            value={environment}
+            onChange={(e) =>
+              setEnvironment(e.target.value as "localhost" | "preview" | "production")
+            }
+          >
+            <option value="localhost">localhost</option>
+            <option value="preview">preview</option>
+            <option value="production">production</option>
+          </select>
+        </div>
+        <div>
+          <Label>URL they will open</Label>
+          <Input
+            type="url"
+            value={reviewedUrl}
+            onChange={(e) => setReviewedUrl(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <Label>Commit / deploy id (optional)</Label>
           <Input value={commitSha} onChange={(e) => setCommitSha(e.target.value)} />
         </div>
         <Button type="submit">Freeze snapshot</Button>

@@ -332,6 +332,35 @@ missionRoutes.post("/missions/:missionId/evidence", async (c) => {
   return jsonOk(c, stored, 201);
 });
 
+missionRoutes.post("/projects/:projectId/missions/:missionId/rotate-invite", async (c) => {
+  const projectId = c.req.param("projectId");
+  const missionId = c.req.param("missionId");
+  const role = await requireMember(c, projectId, ["owner", "maintainer"]);
+  if (!role) return jsonErr(c, "FORBIDDEN", "Maintainer access required", 403);
+  const mission = await c.env.DB.prepare(
+    `SELECT id, state FROM missions WHERE project_id = ? AND id = ?`,
+  )
+    .bind(projectId, missionId)
+    .first<{ id: string; state: string }>();
+  if (!mission) return jsonErr(c, "NOT_FOUND", "Mission not found", 404);
+  if (mission.state !== "open") {
+    return jsonErr(c, "VALIDATION", "Only open missions can issue invite links", 400);
+  }
+  const invite = randomToken(16);
+  const inviteHash = await sha256Hex(invite);
+  await c.env.DB.prepare(
+    `UPDATE missions SET invite_token_hash = ? WHERE project_id = ? AND id = ?`,
+  )
+    .bind(inviteHash, projectId, missionId)
+    .run();
+  await audit(c, "mission.rotate_invite", "mission", missionId, projectId);
+  return jsonOk(c, {
+    inviteToken: invite,
+    invitePath: `/review/${invite}`,
+    note: "Previous invite links for this mission stop working after rotate.",
+  });
+});
+
 /** Public/unlisted open missions can be reviewed from the inbox without the opaque invite token. */
 missionRoutes.post("/missions/:missionId/reviews", async (c) => {
   const userId = c.get("userId");

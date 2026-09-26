@@ -22,6 +22,8 @@ export type ProjectDetail = {
     source_url: string;
     commit_sha: string | null;
     captured_at: string;
+    environment?: string;
+    reviewed_url?: string | null;
   }>;
   loop?: {
     open_missions: number;
