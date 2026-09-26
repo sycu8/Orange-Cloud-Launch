@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, useLabel } from "../../lib/i18n";
 import { Button, EmptyState, Notice } from "../../components/ui";
 import type { ProjectDetail } from "./ProjectLayout";
 
@@ -24,6 +24,7 @@ type CompareResult = {
 export function ReportsPage() {
   const { id } = useParams();
   const { t } = useI18n();
+  const label = useLabel();
   const { data } = useOutletContext<{ data: ProjectDetail }>();
   const [reports, setReports] = useState<Report[]>([]);
   const [sharePath, setSharePath] = useState<string | null>(null);
@@ -109,10 +110,10 @@ export function ReportsPage() {
           {reports.map((r) => (
             <li key={r.id} className="rounded-[16px] border border-border bg-surface p-4">
               <p className="font-semibold">
-                {r.release_label ?? t("reports.release")} · report v{r.version}
+                {r.release_label ?? t("reports.release")}
               </p>
               <p className="text-sm text-muted">
-                {r.environment ? `${r.environment} · ` : ""}
+                {r.environment ? `${label("env", r.environment)} · ` : ""}
                 {new Date(r.created_at).toLocaleString()}
                 {r.human_sample_size != null
                   ? ` · ${r.human_sample_size} ${
@@ -122,11 +123,11 @@ export function ReportsPage() {
                     }`
                   : ""}
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link to={`/app/projects/${id}/reports/${r.id}`}>
-                  <Button>{t("reports.open")}</Button>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Link to={`/app/projects/${id}/reports/${r.id}`} className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto">{t("reports.open")}</Button>
                 </Link>
-                <Button variant="secondary" onClick={() => void share(r.id)}>
+                <Button variant="secondary" className="w-full sm:w-auto" onClick={() => void share(r.id)}>
                   {t("reports.share")}
                 </Button>
               </div>
@@ -137,7 +138,9 @@ export function ReportsPage() {
       {sharePath ? (
         <div className="mt-4">
           <Notice title={t("reports.shareCreated")} tone="action">
-            <a href={sharePath}>{sharePath}</a>
+            <a className="break-all" href={sharePath}>
+              {sharePath}
+            </a>
           </Notice>
         </div>
       ) : null}

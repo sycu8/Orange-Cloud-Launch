@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, useLabel } from "../../lib/i18n";
 import { Button, EmptyState, Input, Label, Notice, StatusPill, TextArea } from "../../components/ui";
 import { getCsrfToken } from "../../lib/api";
 
@@ -32,6 +32,7 @@ export function ReleaseWorkspacePage() {
   const { id, releaseId } = useParams();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const label = useLabel();
   const [findings, setFindings] = useState<Finding[]>([]);
   const [release, setRelease] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export function ReleaseWorkspacePage() {
           dismissRationale: state === "dismissed" ? dismissRationale : undefined,
         }),
       });
-      setNote(`Finding marked ${state.replaceAll("_", " ")}`);
+      setNote(`${t("release.marked")}: ${t(`changes.state.${state}`) === `changes.state.${state}` ? state.replaceAll("_", " ") : t(`changes.state.${state}`)}`);
       setDismissingId(null);
       setDismissReason("");
       await load();
@@ -110,18 +111,9 @@ export function ReleaseWorkspacePage() {
           })
         : null;
       if (parsed?.browser?.status === "completed" && (parsed.browser.captureCount ?? 0) > 0) {
-        setNote(
-          `Automated checks finished. Browser Run captured ${parsed.browser.captureCount} human-tester snapshot(s). Deterministic and browser notes are not human outcomes.`,
-        );
-      } else if (parsed?.browser?.status === "integration_not_configured") {
-        setNote(
-          "Automated checks finished. Deterministic findings may appear below; Browser Run stays not-configured until credentials are set.",
-        );
+        setNote(t("release.checkPictures"));
       } else {
-        setNote(
-          parsed?.browser?.message ??
-            "Automated checks finished. Review findings below — human task results still come from reviewers.",
-        );
+        setNote(t("release.checkDone"));
       }
       await load();
     } catch (e) {
@@ -144,7 +136,7 @@ export function ReleaseWorkspacePage() {
       });
       setFindingTitle("");
       setFindingBody("");
-      setNote("Founder note logged. Accept it, then propose an improvement.");
+      setNote(t("release.noteSaved"));
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
@@ -168,7 +160,7 @@ export function ReleaseWorkspacePage() {
       });
       const data = (await res.json()) as { id?: string; message?: string };
       if (!res.ok) throw new Error(data.message || "Upload failed");
-      setUploadNote(`Evidence stored as ${data.id} (private R2).`);
+      setUploadNote(t("release.screenshotSaved"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     }
@@ -200,18 +192,24 @@ export function ReleaseWorkspacePage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold">{String(release.label)}</h2>
-          <p className="text-sm text-muted">{String(release.source_url)}</p>
+          <p className="break-all text-sm text-muted">{String(release.source_url)}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <a href={String(release.source_url)} target="_blank" rel="noreferrer">
-            <Button variant="secondary">{t("release.openApp")}</Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          <a href={String(release.source_url)} target="_blank" rel="noreferrer" className="w-full sm:w-auto">
+            <Button variant="secondary" className="w-full sm:w-auto">
+              {t("release.openApp")}
+            </Button>
           </a>
-          <Button variant="secondary" onClick={() => void runAutomated()}>
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={() => void runAutomated()}>
             {t("release.runAutomated")}
           </Button>
-          <Button onClick={() => void generateReport()}>{t("release.generateReport")}</Button>
-          <Link to={`/app/projects/${id}/missions`}>
-            <Button variant="ghost">{t("release.invite")}</Button>
+          <Button className="w-full sm:w-auto" onClick={() => void generateReport()}>
+            {t("release.generateReport")}
+          </Button>
+          <Link to={`/app/projects/${id}/missions`} className="w-full sm:w-auto">
+            <Button variant="ghost" className="w-full sm:w-auto">
+              {t("release.invite")}
+            </Button>
           </Link>
         </div>
       </div>
@@ -281,7 +279,7 @@ export function ReleaseWorkspacePage() {
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp,text/plain,application/json"
-            className="mt-2 block w-full text-sm"
+            className="mt-2 block min-h-[44px] w-full text-base file:mr-3 file:min-h-[44px] file:rounded-[10px] file:border-0 file:bg-orange-tint file:px-4 file:font-semibold"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) void uploadEvidence(file);
@@ -301,11 +299,13 @@ export function ReleaseWorkspacePage() {
               <li key={f.id} className="rounded-[16px] border border-border bg-surface p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <h4 className="font-semibold">{f.title}</h4>
-                  <StatusPill tone="neutral">{f.provenance.replaceAll("_", " ")}</StatusPill>
+                  <StatusPill tone="neutral">{label("provenance", f.provenance)}</StatusPill>
                   <StatusPill tone={f.state === "verified" ? "positive" : "action"}>
-                    {f.state.replaceAll("_", " ")}
+                    {t(`changes.state.${f.state}`) === `changes.state.${f.state}`
+                      ? f.state.replaceAll("_", " ")
+                      : t(`changes.state.${f.state}`)}
                   </StatusPill>
-                  <StatusPill tone="neutral">{f.severity}</StatusPill>
+                  <StatusPill tone="neutral">{label("severity", f.severity)}</StatusPill>
                 </div>
                 {review ? (
                   <div className="mt-3 space-y-2 text-sm">
@@ -343,10 +343,10 @@ export function ReleaseWorkspacePage() {
                     ? ` · ${t("findings.criterion")}: ${f.acceptance_criterion}`
                     : ""}
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   {f.state === "observed" || f.state === "triaged" || f.state === "reopened" ? (
                     <>
-                      <Button onClick={() => void triage(f, "accepted")}>
+                      <Button className="w-full sm:w-auto" onClick={() => void triage(f, "accepted")}>
                         {t("findings.accept")}
                       </Button>
                       <Button variant="ghost" onClick={() => void triage(f, "needs_evidence")}>
@@ -364,8 +364,8 @@ export function ReleaseWorkspacePage() {
                     </>
                   ) : null}
                   {f.state === "accepted" ? (
-                    <Link to={`/app/projects/${id}/changes`}>
-                      <Button>{t("findings.propose")}</Button>
+                    <Link to={`/app/projects/${id}/changes`} className="w-full sm:w-auto">
+                      <Button className="w-full sm:w-auto">{t("findings.propose")}</Button>
                     </Link>
                   ) : null}
                   {(f.state === "accepted" || f.state === "change_proposed") && (

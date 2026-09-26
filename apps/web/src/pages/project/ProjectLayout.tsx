@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, useLabel } from "../../lib/i18n";
 import { StatusPill } from "../../components/ui";
 
 export type ProjectDetail = {
@@ -41,6 +41,7 @@ export type ProjectDetail = {
 export function ProjectLayout() {
   const { me, loading } = useAuth();
   const { t } = useI18n();
+  const label = useLabel();
   const { id } = useParams();
   const [data, setData] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function ProjectLayout() {
 
   const base = `/app/projects/${id}`;
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `rounded-[10px] px-3 py-2 text-sm font-semibold no-underline ${
+    `inline-flex min-h-[44px] shrink-0 items-center whitespace-nowrap rounded-[10px] px-3 py-2 text-sm font-semibold no-underline ${
       isActive ? "bg-orange-tint text-action" : "text-muted hover:text-ink"
     }`;
   const publicPassport =
@@ -75,24 +76,27 @@ export function ProjectLayout() {
             </Link>{" "}
             / {data.project.name}
           </p>
-          <h1 className="mt-1 text-3xl font-bold">{data.project.name}</h1>
+          <h1 className="mt-1 break-words text-2xl font-bold sm:text-3xl">{data.project.name}</h1>
           <p className="mt-1 text-muted">{data.project.purpose}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <StatusPill tone="neutral">{data.role}</StatusPill>
+          <StatusPill tone="neutral">{label("role", data.role)}</StatusPill>
           <StatusPill tone={data.project.visibility === "public" ? "positive" : "neutral"}>
-            {data.project.visibility}
+            {label("visibility", data.project.visibility)}
           </StatusPill>
           {publicPassport ? (
-            <Link to={`/p/${data.project.slug}`} className="text-sm font-semibold">
-              Passport
+            <Link
+              to={`/p/${data.project.slug}`}
+              className="inline-flex min-h-[44px] items-center text-sm font-semibold"
+            >
+              {t("passport.open")}
             </Link>
           ) : (
-            <span className="max-w-[14rem] text-xs text-muted">{t("passport.private")}</span>
+            <span className="max-w-[16rem] text-xs text-muted">{t("passport.private")}</span>
           )}
         </div>
       </div>
-      <nav className="mb-6 flex flex-wrap gap-1 border-b border-border pb-3">
+      <nav className="-mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-border px-4 pb-3 sm:mx-0 sm:flex-wrap sm:px-0">
         <NavLink to={`${base}/overview`} className={linkClass}>
           {t("nav.overview")}
         </NavLink>

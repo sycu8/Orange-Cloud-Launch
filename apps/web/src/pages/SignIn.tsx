@@ -17,7 +17,7 @@ export function SignInPage() {
   const [params] = useSearchParams();
   const next = safeNext(params.get("next"));
   const { t } = useI18n();
-  const [displayName, setDisplayName] = useState("Local Founder");
+  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<string[] | null>(null);
   const [recoveryCode, setRecoveryCode] = useState("");
@@ -123,11 +123,53 @@ export function SignInPage() {
       <div className="space-y-4 rounded-[16px] border border-border bg-surface p-5">
         <div>
           <Label>{t("signin.displayName")}</Label>
-          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          <Input
+            value={displayName}
+            placeholder={t("signin.displayNamePh")}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+          <p className="mt-1 text-sm text-muted">{t("signin.passkeyHelp")}</p>
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button className="w-full sm:w-auto" disabled={busy} onClick={() => void registerPasskey()}>
+            {t("signin.createPasskey")}
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            disabled={busy}
+            onClick={() => void loginPasskey()}
+          >
+            {t("signin.signInPasskey")}
+          </Button>
+        </div>
+        <details className="rounded-[12px] border border-border p-3">
+          <summary className="min-h-[44px] cursor-pointer text-sm font-semibold">
+            {t("signin.recovery")}
+          </summary>
+          <p className="mt-2 text-sm text-muted">{t("signin.recoveryHelp")}</p>
+          <div className="mt-3 space-y-2">
+            <Input
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value)}
+              placeholder={t("signin.recoveryPlaceholder")}
+            />
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              disabled={busy || !recoveryCode}
+              onClick={() => void redeemRecovery()}
+            >
+              {t("signin.redeem")}
+            </Button>
+          </div>
+        </details>
         {loopback ? (
-          <Notice title={t("signin.localDev")} tone="action">
-            {t("signin.localDevBody")}
+          <details className="rounded-[12px] border border-border p-3">
+            <summary className="min-h-[44px] cursor-pointer text-sm font-semibold">
+              {t("signin.localDev")}
+            </summary>
+            <p className="mt-2 text-sm text-muted">{t("signin.localDevBody")}</p>
             <div className="mt-3 space-y-2">
               <Input
                 type="password"
@@ -136,51 +178,39 @@ export function SignInPage() {
                 placeholder={t("signin.localSecret")}
                 autoComplete="off"
               />
-              <Button disabled={busy || !devSecret} onClick={() => void devLogin()}>
+              <Button
+                className="w-full sm:w-auto"
+                disabled={busy || !devSecret}
+                onClick={() => void devLogin()}
+              >
                 {t("signin.continueLocal")}
               </Button>
             </div>
-          </Notice>
+          </details>
         ) : null}
-        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-          <Button variant="secondary" disabled={busy} onClick={() => void registerPasskey()}>
-            {t("signin.createPasskey")}
-          </Button>
-          <Button variant="ghost" disabled={busy} onClick={() => void loginPasskey()}>
-            {t("signin.signInPasskey")}
-          </Button>
-        </div>
-        <div className="space-y-2 border-t border-border pt-4">
-          <Label>{t("signin.recovery")}</Label>
-          <Input
-            value={recoveryCode}
-            onChange={(e) => setRecoveryCode(e.target.value)}
-            placeholder={t("signin.recoveryPlaceholder")}
-          />
-          <Button
-            variant="secondary"
-            disabled={busy || !recoveryCode}
-            onClick={() => void redeemRecovery()}
-          >
-            {t("signin.redeem")}
-          </Button>
-        </div>
         {error ? (
           <Notice title={t("signin.error")} tone="danger">
             {error}
           </Notice>
         ) : null}
         {recovery ? (
-          <Notice title="Store these recovery codes now" tone="positive">
-            <p className="mb-2">They are shown once. Each code is single-use.</p>
-            <ul className="font-mono text-xs">
+          <Notice title={t("signin.codesTitle")} tone="positive">
+            <p className="mb-2">{t("signin.codesBody")}</p>
+            <ul className="break-all font-mono text-sm">
               {recovery.map((c) => (
                 <li key={c}>{c}</li>
               ))}
             </ul>
-            <div className="mt-3">
-              <Link to={next}>
-                <Button>Continue</Button>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => void navigator.clipboard.writeText(recovery.join("\n"))}
+              >
+                {t("signin.copyCodes")}
+              </Button>
+              <Link to={next} className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto">{t("signin.continue")}</Button>
               </Link>
             </div>
           </Notice>

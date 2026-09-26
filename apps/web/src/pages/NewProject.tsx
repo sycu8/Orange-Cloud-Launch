@@ -57,34 +57,31 @@ export function NewProjectPage() {
           <Input
             required
             value={form.name}
+            placeholder={t("project.new.namePh")}
             onChange={(e) =>
               setForm((f) => ({
                 ...f,
                 name: e.target.value,
-                slug:
-                  f.slug ||
-                  e.target.value
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/^-|-$/g, "")
-                    .slice(0, 48),
+                slug: e.target.value
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "-")
+                  .replace(/^-|-$/g, "")
+                  .slice(0, 48),
               }))
             }
           />
-        </div>
-        <div>
-          <Label>{t("project.new.slug")}</Label>
-          <Input
-            required
-            value={form.slug}
-            onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))}
-          />
+          {form.slug ? (
+            <p className="mt-1 text-sm text-muted">
+              {t("project.new.slugHint")}: {form.slug}
+            </p>
+          ) : null}
         </div>
         <div>
           <Label>{t("project.new.purpose")}</Label>
           <TextArea
             required
             value={form.purpose}
+            placeholder={t("project.new.purposePh")}
             onChange={(e) => setForm((f) => ({ ...f, purpose: e.target.value }))}
           />
         </div>
@@ -93,6 +90,7 @@ export function NewProjectPage() {
           <Input
             required
             value={form.audience}
+            placeholder={t("project.new.audiencePh")}
             onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value }))}
           />
         </div>
@@ -112,11 +110,12 @@ export function NewProjectPage() {
             onChange={(e) => setForm((f) => ({ ...f, liveUrl: e.target.value }))}
             placeholder="https://"
           />
+          <p className="mt-1 text-sm text-muted">{t("project.new.liveUrlHelp")}</p>
         </div>
         <div>
           <Label>{t("project.new.visibility")}</Label>
           <select
-            className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
+            className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3 text-base"
             value={form.visibility}
             onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value }))}
           >
@@ -130,7 +129,7 @@ export function NewProjectPage() {
             {error}
           </Notice>
         ) : null}
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={busy}>
           {t("project.new.create")}
         </Button>
       </form>

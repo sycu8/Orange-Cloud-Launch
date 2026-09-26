@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { useI18n } from "../lib/i18n";
+import { useI18n, useLabel } from "../lib/i18n";
 import { Button, EmptyState, Notice, PageHeader, StatusPill } from "../components/ui";
 
 type WorkspaceProject = {
@@ -22,6 +22,7 @@ type WorkspaceProject = {
 export function WorkspacePage() {
   const { me, loading } = useAuth();
   const { t } = useI18n();
+  const label = useLabel();
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [inboxCount, setInboxCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -60,11 +61,13 @@ export function WorkspacePage() {
           className="block rounded-[16px] border border-border bg-surface px-4 py-4 text-ink no-underline transition-transform duration-160 hover:-translate-y-0.5 sm:max-w-md"
         >
           <p className="text-sm font-semibold text-muted">{t("workspace.inbox")}</p>
-          <p className="mt-1 text-2xl font-bold">
-            {inboxCount} {t("workspace.openMissions")}
-            <span className="ml-2 text-sm font-semibold text-muted">
-              {inboxCount === 1 ? t("workspace.mission") : t("workspace.missions")}
-            </span>
+          <p className="mt-1 text-2xl font-bold">{inboxCount}</p>
+          <p className="text-sm text-muted">
+            {inboxCount === 0
+              ? t("workspace.waitingNone")
+              : inboxCount === 1
+                ? t("workspace.waitingOne")
+                : t("workspace.waitingMany")}
           </p>
         </Link>
       </div>
@@ -107,7 +110,7 @@ export function WorkspacePage() {
                       <p className="mt-1 text-sm text-muted">{p.purpose}</p>
                     </div>
                     <StatusPill tone={p.visibility === "public" ? "positive" : "neutral"}>
-                      {p.visibility}
+                      {label("visibility", p.visibility)}
                     </StatusPill>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-muted">

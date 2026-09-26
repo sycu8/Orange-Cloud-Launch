@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, useLabel } from "../../lib/i18n";
 import { Button, EmptyState, Input, Label, Notice, StatusPill } from "../../components/ui";
 import type { ProjectDetail } from "./ProjectLayout";
 
@@ -94,9 +94,10 @@ export function ProjectOverviewPage() {
     data: ProjectDetail;
     reload: () => Promise<void>;
   }>();
-  const [label, setLabel] = useState("Release 1");
+  const labelText = useLabel();
+  const [label, setLabel] = useState("");
   const [sourceUrl, setSourceUrl] = useState(data.project.live_url ?? "");
-  const [reviewedUrl, setReviewedUrl] = useState(data.project.live_url ?? "");
+  const [reviewedUrl, setReviewedUrl] = useState("");
   const [environment, setEnvironment] = useState<"localhost" | "preview" | "production">(
     "preview",
   );
@@ -111,22 +112,17 @@ export function ProjectOverviewPage() {
     e.preventDefault();
     setError(null);
     try {
-      const rel = await api<{ id: string; defaultMissions?: number }>(
-        `/api/projects/${id}/releases`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            label,
-            sourceUrl,
-            reviewedUrl: reviewedUrl || sourceUrl,
-            environment,
-            commitSha: commitSha || undefined,
-          }),
-        },
-      );
-      setMessage(
-        `Release captured with ${rel.defaultMissions ?? 5} dangerous-path missions. Invite reviewers — could not complete is a real review.`,
-      );
+      await api(`/api/projects/${id}/releases`, {
+        method: "POST",
+        body: JSON.stringify({
+          label,
+          sourceUrl,
+          reviewedUrl: reviewedUrl.trim() || sourceUrl,
+          environment,
+          commitSha: commitSha || undefined,
+        }),
+      });
+      setMessage(t("overview.saved"));
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
@@ -149,24 +145,11 @@ export function ProjectOverviewPage() {
           })
         : null;
       if (parsed?.status === "quota_exceeded") {
-        setError(parsed.message ?? "Quota exceeded");
-      } else if (parsed?.status === "completed") {
-        const browserStatus = parsed.browser?.status;
-        if (browserStatus === "completed" && (parsed.browser?.captureCount ?? 0) > 0) {
-          setMessage(
-            `Automated review finished. Browser Run human-tester saved ${parsed.browser?.captureCount} viewport snapshot(s). Human reviews still count separately.`,
-          );
-        } else if (browserStatus === "integration_not_configured") {
-          setMessage(
-            `Automated review finished (${result.job.state}). Browser Run is not configured — deterministic notes only; not human outcomes.`,
-          );
-        } else {
-          setMessage(
-            `Automated review finished (${result.job.state}). ${parsed.browser?.message ?? "Check findings."}`,
-          );
-        }
+        setError(t("overview.checkQuota"));
+      } else if (parsed?.browser?.status === "completed" && (parsed.browser?.captureCount ?? 0) > 0) {
+        setMessage(t("overview.checkPictures"));
       } else {
-        setMessage(`Job ${result.job.state}`);
+        setMessage(t("overview.checkDone"));
       }
       await reload();
     } catch (err) {
@@ -174,8 +157,81 @@ export function ProjectOverviewPage() {
     }
   }
 
+  const captureForm = (
+    <form
+      onSubmit={(e) => void addRelease(e)}
+      className="space-y-3 rounded-[16px] border border-border bg-surface p-5"
+    >
+      <h2 className="text-lg font-semibold">
+        {latest ? t("overview.captureAgain") : t("overview.capture")}
+      </h2>
+      <p className="text-sm text-muted">{t("overview.captureBody")}</p>
+      <div>
+        <Label>{t("overview.label")}</Label>
+        <Input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder={t("overview.labelPh")}
+          required
+        />
+      </div>
+      <div>
+        <Label>{t("overview.sourceUrl")}</Label>
+        <Input
+          type="url"
+          value={sourceUrl}
+          onChange={(e) => setSourceUrl(e.target.value)}
+          placeholder="https://"
+          required
+        />
+      </div>
+      <div>
+        <Label>{t("overview.whereTry")}</Label>
+        <select
+          className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3 text-base"
+          value={environment}
+          onChange={(e) =>
+            setEnvironment(e.target.value as "localhost" | "preview" | "production")
+          }
+        >
+          <option value="preview">{t("label.env.preview")}</option>
+          <option value="production">{t("label.env.production")}</option>
+          <option value="localhost">{t("label.env.localhost")}</option>
+        </select>
+      </div>
+      <details className="rounded-[12px] border border-border p-3">
+        <summary className="min-h-[44px] cursor-pointer text-sm font-semibold">
+          {t("overview.commit")}
+        </summary>
+        <p className="mt-2 text-sm text-muted">{t("overview.commitHelp")}</p>
+        <div className="mt-3">
+          <Label>{t("overview.urlOpen")}</Label>
+          <Input
+            type="url"
+            value={reviewedUrl}
+            onChange={(e) => setReviewedUrl(e.target.value)}
+            placeholder={sourceUrl || "https://"}
+          />
+        </div>
+        <div className="mt-3">
+          <Input
+            value={commitSha}
+            onChange={(e) => setCommitSha(e.target.value)}
+            placeholder={t("changes.versionPh")}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+      </details>
+      <Button type="submit" className="w-full sm:w-auto">
+        {t("overview.freeze")}
+      </Button>
+    </form>
+  );
+
   return (
     <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+      {!latest ? <div className="lg:col-span-2">{captureForm}</div> : null}
       <div className="space-y-6">
         <div>
           <h2 className="text-xl font-semibold">{t("overview.guided")}</h2>
@@ -189,7 +245,7 @@ export function ProjectOverviewPage() {
             {steps.map((step, index) => (
               <li
                 key={step.key}
-                className={`flex flex-wrap items-center justify-between gap-2 rounded-[12px] border px-3 py-3 ${
+                className={`flex flex-col gap-2 rounded-[12px] border px-3 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${
                   step.key === nextStep.key
                     ? "border-accent bg-orange-tint"
                     : "border-border bg-surface"
@@ -203,8 +259,11 @@ export function ProjectOverviewPage() {
                   </StatusPill>
                 </div>
                 {step.href && step.cta ? (
-                  <Link to={step.href}>
-                    <Button variant={step.key === nextStep.key ? "primary" : "ghost"}>
+                  <Link to={step.href} className="w-full sm:w-auto">
+                    <Button
+                      className="w-full sm:w-auto"
+                      variant={step.key === nextStep.key ? "primary" : "ghost"}
+                    >
                       {step.cta}
                     </Button>
                   </Link>
@@ -225,20 +284,24 @@ export function ProjectOverviewPage() {
             <div className="mt-3 rounded-[16px] border border-border bg-surface p-5">
               <p className="text-sm text-muted">{t("overview.latest")}</p>
               <p className="text-lg font-semibold">{latest.label}</p>
-              <p className="truncate text-sm text-muted">{latest.source_url}</p>
-              <p className="mt-1 text-xs font-semibold text-muted">
-                {t("overview.triedOn")} {latest.environment ?? "preview"}
-                {latest.reviewed_url ? ` · ${latest.reviewed_url}` : ""}
-                {latest.commit_sha ? ` · ${latest.commit_sha}` : ""}
+              <p className="break-all text-sm text-muted">{latest.source_url}</p>
+              <p className="mt-1 text-sm font-semibold text-muted">
+                {t("overview.triedOn")} {labelText("env", latest.environment ?? "preview")}
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link to={`/app/projects/${id}/releases/${latest.id}`}>
-                  <Button>{t("overview.openWorkspace")}</Button>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Link to={`/app/projects/${id}/releases/${latest.id}`} className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto">{t("overview.openWorkspace")}</Button>
                 </Link>
-                <Link to={`/app/projects/${id}/missions`}>
-                  <Button variant="secondary">{t("overview.shareMissions")}</Button>
+                <Link to={`/app/projects/${id}/missions`} className="w-full sm:w-auto">
+                  <Button variant="secondary" className="w-full sm:w-auto">
+                    {t("overview.shareMissions")}
+                  </Button>
                 </Link>
-                <Button variant="ghost" onClick={() => void runAutomated(latest.id)}>
+                <Button
+                  variant="ghost"
+                  className="w-full sm:w-auto"
+                  onClick={() => void runAutomated(latest.id)}
+                >
                   {t("overview.runAutomated")}
                 </Button>
               </div>
@@ -260,57 +323,7 @@ export function ProjectOverviewPage() {
           ) : null}
         </div>
       </div>
-      <form
-        onSubmit={(e) => void addRelease(e)}
-        className="space-y-3 rounded-[16px] border border-border bg-surface p-5"
-      >
-        <h2 className="text-lg font-semibold">{t("overview.capture")}</h2>
-        <p className="text-sm text-muted">{t("overview.captureBody")}</p>
-        <div>
-          <Label>{t("overview.label")}</Label>
-          <Input value={label} onChange={(e) => setLabel(e.target.value)} required />
-        </div>
-        <div>
-          <Label>{t("overview.sourceUrl")}</Label>
-          <Input
-            type="url"
-            value={sourceUrl}
-            onChange={(e) => {
-              setSourceUrl(e.target.value);
-              if (!reviewedUrl || reviewedUrl === sourceUrl) setReviewedUrl(e.target.value);
-            }}
-            required
-          />
-        </div>
-        <div>
-          <Label>{t("overview.whereTry")}</Label>
-          <select
-            className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
-            value={environment}
-            onChange={(e) =>
-              setEnvironment(e.target.value as "localhost" | "preview" | "production")
-            }
-          >
-            <option value="localhost">localhost</option>
-            <option value="preview">preview</option>
-            <option value="production">production</option>
-          </select>
-        </div>
-        <div>
-          <Label>{t("overview.urlOpen")}</Label>
-          <Input
-            type="url"
-            value={reviewedUrl}
-            onChange={(e) => setReviewedUrl(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <Label>{t("overview.commit")}</Label>
-          <Input value={commitSha} onChange={(e) => setCommitSha(e.target.value)} />
-        </div>
-        <Button type="submit">{t("overview.freeze")}</Button>
-      </form>
+      {latest ? captureForm : null}
     </div>
   );
 }

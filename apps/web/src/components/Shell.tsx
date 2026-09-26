@@ -16,11 +16,11 @@ export function MarketingShell() {
             <img src={iconUrl} alt="" className="h-9 w-9 shrink-0" width={36} height={36} />
             <span className="truncate text-lg font-bold tracking-tight">OCLaunch</span>
           </Link>
-          <nav className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <nav className="flex shrink-0 flex-wrap items-center justify-end gap-1 sm:gap-2">
             <LanguageSelect compact />
             <Link
               to="/discover"
-              className="hidden min-h-[44px] items-center px-2 text-sm font-semibold text-ink no-underline sm:inline-flex"
+              className="inline-flex min-h-[44px] items-center px-2 text-sm font-semibold text-ink no-underline"
             >
               {t("nav.discover")}
             </Link>
@@ -32,11 +32,9 @@ export function MarketingShell() {
                 >
                   {t("nav.workspace")}
                 </Link>
-                <span className="hidden sm:inline-flex">
-                  <Button variant="ghost" onClick={() => void logout()}>
-                    {t("nav.logOut")}
-                  </Button>
-                </span>
+                <Button variant="ghost" onClick={() => void logout()}>
+                  {t("nav.logOut")}
+                </Button>
               </>
             ) : (
               <Link to="/signin">

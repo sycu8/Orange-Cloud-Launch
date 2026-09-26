@@ -48,7 +48,7 @@ export function ProjectSettingsPage() {
       <div>
         <Label>{t("settings.visibility")}</Label>
         <select
-          className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
+          className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3 text-base"
           value={form.visibility}
           onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value }))}
         >
