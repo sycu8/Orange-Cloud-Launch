@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 import { Button, EmptyState, Input, Label, Notice, StatusPill } from "../../components/ui";
 import type { ProjectDetail } from "./ProjectLayout";
 
@@ -12,7 +13,11 @@ type LoopStep = {
   cta?: string;
 };
 
-function buildLoopSteps(id: string, data: ProjectDetail): LoopStep[] {
+function buildLoopSteps(
+  id: string,
+  data: ProjectDetail,
+  t: (key: string) => string,
+): LoopStep[] {
   const latest = data.releases[0];
   const loop = data.loop ?? {
     open_missions: 0,
@@ -27,14 +32,14 @@ function buildLoopSteps(id: string, data: ProjectDetail): LoopStep[] {
   return [
     {
       key: "release",
-      label: "Capture a frozen release",
+      label: t("overview.step.release"),
       done: Boolean(latest),
       href: latest ? `/app/projects/${id}/releases/${latest.id}` : undefined,
-      cta: latest ? "Open latest release" : undefined,
+      cta: latest ? t("overview.cta.openLatest") : undefined,
     },
     {
       key: "review",
-      label: "Collect evidence (review or founder note)",
+      label: t("overview.step.review"),
       done:
         loop.open_missions > 0 ||
         loop.open_findings +
@@ -43,41 +48,48 @@ function buildLoopSteps(id: string, data: ProjectDetail): LoopStep[] {
           loop.verified_findings >
           0,
       href: latest ? `/app/projects/${id}/releases/${latest.id}` : `/app/projects/${id}/missions`,
-      cta: latest ? "Open release" : "Open reviews",
+      cta: latest ? t("overview.cta.openRelease") : t("overview.cta.openReviews"),
     },
     {
       key: "triage",
-      label: "Triage and accept findings",
+      label: t("overview.step.triage"),
       done: loop.accepted_findings + loop.in_progress_findings + loop.verified_findings > 0,
       href: latest ? `/app/projects/${id}/releases/${latest.id}` : `/app/projects/${id}/missions`,
-      cta: loop.open_findings > 0 ? `Triage ${loop.open_findings} open` : "Open release",
+      cta:
+        loop.open_findings > 0
+          ? `${t("overview.cta.triageOpen")} ${loop.open_findings}`
+          : t("overview.cta.openRelease"),
     },
     {
       key: "improve",
-      label: "Propose / export an improvement",
+      label: t("overview.step.improve"),
       done: loop.change_sets > 0,
       href: `/app/projects/${id}/changes`,
-      cta: "Improvement studio",
+      cta: t("overview.cta.studio"),
     },
     {
       key: "verify",
-      label: "Mark implemented and verify live",
+      label: t("overview.step.verify"),
       done: loop.verified_findings > 0,
       href: latest ? `/app/projects/${id}/releases/${latest.id}` : `/app/projects/${id}/changes`,
-      cta: loop.implemented_changes > 0 ? "Verify on release" : "Verify findings",
+      cta:
+        loop.implemented_changes > 0
+          ? t("overview.cta.verifyRelease")
+          : t("overview.cta.verifyFindings"),
     },
     {
       key: "report",
-      label: "Generate a release report",
+      label: t("overview.step.report"),
       done: loop.reports > 0,
       href: `/app/projects/${id}/reports`,
-      cta: loop.reports > 0 ? "View reports" : "Go to reports",
+      cta: loop.reports > 0 ? t("overview.cta.viewReports") : t("overview.cta.goReports"),
     },
   ];
 }
 
 export function ProjectOverviewPage() {
   const { id } = useParams();
+  const { t } = useI18n();
   const { data, reload } = useOutletContext<{
     data: ProjectDetail;
     reload: () => Promise<void>;
@@ -92,7 +104,7 @@ export function ProjectOverviewPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const latest = data.releases[0];
-  const steps = buildLoopSteps(id!, data);
+  const steps = buildLoopSteps(id!, data, t);
   const nextStep = steps.find((s) => !s.done) ?? steps[steps.length - 1]!;
 
   async function addRelease(e: React.FormEvent) {
@@ -151,11 +163,12 @@ export function ProjectOverviewPage() {
     <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold">Guided improvement loop</h2>
+          <h2 className="text-xl font-semibold">{t("overview.guided")}</h2>
           <p className="mt-1 text-sm text-muted">
-            Next: <span className="font-semibold text-action">{nextStep.label}</span>
-            {" — "}solo founders can finish without a second account by logging a note or running
-            automated checks on a release.
+            {t("common.next")}:{" "}
+            <span className="font-semibold text-action">{nextStep.label}</span>
+            {" — "}
+            {t("overview.nextSolo")}
           </p>
           <ol className="mt-4 space-y-2">
             {steps.map((step, index) => (
@@ -171,7 +184,7 @@ export function ProjectOverviewPage() {
                   <span className="text-sm font-semibold text-muted">{index + 1}</span>
                   <span className="font-semibold">{step.label}</span>
                   <StatusPill tone={step.done ? "positive" : "neutral"}>
-                    {step.done ? "done" : "todo"}
+                    {step.done ? t("common.done") : t("common.todo")}
                   </StatusPill>
                 </div>
                 {step.href && step.cta ? (
@@ -187,63 +200,63 @@ export function ProjectOverviewPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold">Latest release</h2>
+          <h2 className="text-xl font-semibold">{t("overview.latest")}</h2>
           {!latest ? (
             <EmptyState
-              title="Add a release to start tracking improvements."
-              body="Reviews always point to a frozen release URL and capture time — never an undefined “latest” screen."
+              title={t("overview.emptyReleaseTitle")}
+              body={t("overview.emptyReleaseBody")}
             />
           ) : (
             <div className="mt-3 rounded-[16px] border border-border bg-surface p-5">
-              <p className="text-sm text-muted">Latest release</p>
+              <p className="text-sm text-muted">{t("overview.latest")}</p>
               <p className="text-lg font-semibold">{latest.label}</p>
               <p className="truncate text-sm text-muted">{latest.source_url}</p>
               <p className="mt-1 text-xs font-semibold text-muted">
-                Tried on {latest.environment ?? "preview"}
+                {t("overview.triedOn")} {latest.environment ?? "preview"}
                 {latest.reviewed_url ? ` · ${latest.reviewed_url}` : ""}
                 {latest.commit_sha ? ` · ${latest.commit_sha}` : ""}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link to={`/app/projects/${id}/releases/${latest.id}`}>
-                  <Button>Open release workspace</Button>
+                  <Button>{t("overview.openWorkspace")}</Button>
                 </Link>
                 <Link to={`/app/projects/${id}/missions`}>
-                  <Button variant="secondary">Share review missions</Button>
+                  <Button variant="secondary">{t("overview.shareMissions")}</Button>
                 </Link>
                 <Button variant="ghost" onClick={() => void runAutomated(latest.id)}>
-                  Run automated checks
+                  {t("overview.runAutomated")}
                 </Button>
               </div>
             </div>
           )}
           {message ? (
             <div className="mt-4">
-              <Notice title="Update" tone="positive">
+              <Notice title={t("common.update")} tone="positive">
                 {message}
               </Notice>
             </div>
           ) : null}
           {error ? (
             <div className="mt-4">
-              <Notice title="Action blocked" tone="danger">
+              <Notice title={t("overview.blocked")} tone="danger">
                 {error}
               </Notice>
             </div>
           ) : null}
         </div>
       </div>
-      <form onSubmit={(e) => void addRelease(e)} className="space-y-3 rounded-[16px] border border-border bg-surface p-5">
-        <h2 className="text-lg font-semibold">Capture release</h2>
-        <p className="text-sm text-muted">
-          Freezes five dangerous-path missions automatically. Record where a human will try it —
-          preview success is not production proof.
-        </p>
+      <form
+        onSubmit={(e) => void addRelease(e)}
+        className="space-y-3 rounded-[16px] border border-border bg-surface p-5"
+      >
+        <h2 className="text-lg font-semibold">{t("overview.capture")}</h2>
+        <p className="text-sm text-muted">{t("overview.captureBody")}</p>
         <div>
-          <Label>Label</Label>
+          <Label>{t("overview.label")}</Label>
           <Input value={label} onChange={(e) => setLabel(e.target.value)} required />
         </div>
         <div>
-          <Label>Source URL (frozen snapshot)</Label>
+          <Label>{t("overview.sourceUrl")}</Label>
           <Input
             type="url"
             value={sourceUrl}
@@ -255,7 +268,7 @@ export function ProjectOverviewPage() {
           />
         </div>
         <div>
-          <Label>Where a human will try it</Label>
+          <Label>{t("overview.whereTry")}</Label>
           <select
             className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
             value={environment}
@@ -269,7 +282,7 @@ export function ProjectOverviewPage() {
           </select>
         </div>
         <div>
-          <Label>URL they will open</Label>
+          <Label>{t("overview.urlOpen")}</Label>
           <Input
             type="url"
             value={reviewedUrl}
@@ -278,10 +291,10 @@ export function ProjectOverviewPage() {
           />
         </div>
         <div>
-          <Label>Commit / deploy id (optional)</Label>
+          <Label>{t("overview.commit")}</Label>
           <Input value={commitSha} onChange={(e) => setCommitSha(e.target.value)} />
         </div>
-        <Button type="submit">Freeze snapshot</Button>
+        <Button type="submit">{t("overview.freeze")}</Button>
       </form>
     </div>
   );

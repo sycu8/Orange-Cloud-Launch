@@ -1,12 +1,16 @@
 import { Link } from "react-router-dom";
-import { PRODUCT } from "@oclaunch/shared";
+import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n";
 import { Button } from "../components/ui";
 import iconUrl from "../assets/oclaunch-icon.svg";
 
 export function HomePage() {
+  const { me } = useAuth();
+  const { t } = useI18n();
+  const reviewHref = me ? "/app/inbox" : "/signin?next=/app/inbox";
+
   return (
     <div>
-      {/* One composition: brand + headline + CTAs over a full-bleed visual plane */}
       <section className="relative overflow-hidden border-b border-border bg-ink">
         <div
           className="pointer-events-none absolute inset-0"
@@ -28,20 +32,22 @@ export function HomePage() {
               />
               <div className="min-w-0">
                 <p className="text-3xl font-bold tracking-tight sm:text-4xl">OCLaunch</p>
-                <p className="text-sm font-semibold text-accent sm:text-base">{PRODUCT.tagline}</p>
+                <p className="text-sm font-semibold text-accent sm:text-base">{t("home.tagline")}</p>
               </div>
             </div>
             <h1 className="max-w-xl text-[2.125rem] font-bold leading-[1.12] tracking-tight sm:text-5xl">
-              {PRODUCT.headline}
+              {t("home.headline")}
             </h1>
-            <p className="mt-4 max-w-md text-base text-[#DFE4E2] sm:text-lg">{PRODUCT.support}</p>
+            <p className="mt-4 max-w-md text-base text-[#DFE4E2] sm:text-lg">
+              {t("home.support")}
+            </p>
             <div className="mt-8 flex w-full flex-col gap-3 sm:max-w-md sm:flex-row">
-              <Link to="/app/new" className="sm:flex-1">
-                <Button className="w-full">{PRODUCT.primaryCta}</Button>
+              <Link to={me ? "/app/new" : "/signin?next=/app/new"} className="sm:flex-1">
+                <Button className="w-full">{t("home.cta.add")}</Button>
               </Link>
-              <Link to="/discover" className="sm:flex-1">
+              <Link to={reviewHref} className="sm:flex-1">
                 <Button variant="secondary" className="w-full bg-canvas text-ink">
-                  {PRODUCT.secondaryCta}
+                  {t("home.cta.review")}
                 </Button>
               </Link>
             </div>
@@ -49,59 +55,31 @@ export function HomePage() {
 
           <div
             className="animate-rise-delay relative min-h-[280px] overflow-hidden rounded-[16px] border border-[#2a3d44] bg-[#132024] text-canvas sm:min-h-[340px] lg:min-h-[380px] lg:rounded-[24px]"
-            aria-label="Labeled product example of the review loop"
+            aria-label={t("home.example.label")}
           >
             <div className="relative flex h-full flex-col justify-between p-5 sm:p-7">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-                Example loop · fictional demo product
+                {t("home.example.label")}
               </p>
               <ol className="mt-6 space-y-3.5 text-sm sm:mt-8 sm:space-y-4 sm:text-base">
                 <li className="border-l-2 border-accent pl-3">
-                  <span className="font-semibold text-accent">Capture release</span>
-                  <p className="text-[#DFE4E2]">Freeze a URL, viewport, and ruleset version.</p>
+                  <span className="font-semibold text-accent">{t("home.example.capture")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.captureBody")}</p>
                 </li>
                 <li className="border-l-2 border-accent pl-3">
-                  <span className="font-semibold text-accent">Focused review</span>
-                  <p className="text-[#DFE4E2]">
-                    “Create your first weekly plan without help.”
-                  </p>
+                  <span className="font-semibold text-accent">{t("home.example.review")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.reviewBody")}</p>
                 </li>
                 <li className="border-l-2 border-accent pl-3">
-                  <span className="font-semibold text-accent">Improve with evidence</span>
-                  <p className="text-[#DFE4E2]">Accept findings, export tasks, or open a draft PR.</p>
+                  <span className="font-semibold text-accent">{t("home.example.improve")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.improveBody")}</p>
                 </li>
                 <li className="border-l-2 border-positive pl-3">
-                  <span className="font-semibold text-[#5EEAD4]">Verify &amp; report</span>
-                  <p className="text-[#DFE4E2]">Record what got better before the next release.</p>
+                  <span className="font-semibold text-[#5EEAD4]">{t("home.example.verify")}</span>
+                  <p className="text-[#DFE4E2]">{t("home.example.verifyBody")}</p>
                 </li>
               </ol>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-canvas">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:py-16">
-          <h2 className="text-2xl font-bold tracking-tight">The improvement loop</h2>
-          <p className="mt-2 max-w-2xl text-muted">
-            Add a project, capture a release, collect evidence, select improvements, then verify
-            what shipped. A merged PR alone is not a completed loop.
-          </p>
-          <div className="mt-8 grid gap-8 sm:grid-cols-3 sm:gap-6">
-            {[
-              ["Useful reviews", "Task outcomes, pins, and distinguishable finding sources."],
-              ["Reviewable changes", "Agent export now; sandbox preview + draft PR when configured."],
-              ["Evidence-based reports", "Coverage, accepted work, and the next three actions."],
-            ].map(([title, body], i) => (
-              <div
-                key={title}
-                className="border-t border-border pt-4 sm:border-t-0 sm:border-l sm:pl-5 sm:pt-0"
-                style={{ borderLeftColor: i === 0 ? undefined : undefined }}
-              >
-                <h3 className="font-semibold text-ink">{title}</h3>
-                <p className="mt-1 text-sm text-muted">{body}</p>
-              </div>
-            ))}
           </div>
         </div>
       </section>

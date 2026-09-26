@@ -1,25 +1,29 @@
 import { useEffect, useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 import { Button, EmptyState, Notice } from "../../components/ui";
 import type { ProjectDetail } from "./ProjectLayout";
 
 type Report = {
   id: string;
   release_id: string;
+  release_label?: string;
   version: number;
   created_at: string;
+  environment?: string | null;
+  human_sample_size?: number | null;
 };
 
 type CompareResult = {
   newFindingTitles: string[];
   improvedTitles: string[];
-  counts: { target: Record<string, number>; base: Record<string, number> };
   note: string;
 };
 
 export function ReportsPage() {
   const { id } = useParams();
+  const { t } = useI18n();
   const { data } = useOutletContext<{ data: ProjectDetail }>();
   const [reports, setReports] = useState<Report[]>([]);
   const [sharePath, setSharePath] = useState<string | null>(null);
@@ -50,7 +54,7 @@ export function ReportsPage() {
   async function runCompare() {
     const [target, base] = data.releases;
     if (!target || !base) {
-      setError("Need at least two releases to compare.");
+      setError(t("reports.compareNeedTwo"));
       return;
     }
     try {
@@ -63,54 +67,67 @@ export function ReportsPage() {
     }
   }
 
+  const canCompare = data.releases.length >= 2;
+
   return (
     <div>
-      <h2 className="text-xl font-semibold">Release reports</h2>
-      <p className="mt-1 text-sm text-muted">
-        Immutable snapshots for deciding what to improve next. No universal readiness score.
-      </p>
+      <h2 className="text-xl font-semibold">{t("reports.title")}</h2>
+      <p className="mt-1 text-sm text-muted">{t("reports.subtitle")}</p>
       <div className="mt-4">
-        <Button variant="secondary" onClick={() => void runCompare()}>
-          Compare latest two releases
+        <Button variant="secondary" disabled={!canCompare} onClick={() => void runCompare()}>
+          {t("reports.compare")}
         </Button>
+        {!canCompare ? (
+          <p className="mt-2 text-sm text-muted">{t("reports.compareNeedTwo")}</p>
+        ) : null}
       </div>
       {compare ? (
         <div className="mt-4">
-          <Notice title="Release comparison" tone="action">
+          <Notice title={t("reports.comparison")} tone="action">
             <p>{compare.note}</p>
             <p className="mt-2">
-              New finding titles: {compare.newFindingTitles.length ? compare.newFindingTitles.join("; ") : "none"}
+              {t("reports.new")}:{" "}
+              {compare.newFindingTitles.length
+                ? compare.newFindingTitles.join("; ")
+                : t("reports.none")}
             </p>
             <p>
-              Improved since previous:{" "}
-              {compare.improvedTitles.length ? compare.improvedTitles.join("; ") : "none"}
+              {t("reports.improved")}:{" "}
+              {compare.improvedTitles.length
+                ? compare.improvedTitles.join("; ")
+                : t("reports.none")}
             </p>
           </Notice>
         </div>
       ) : null}
       {reports.length === 0 ? (
         <div className="mt-4">
-          <EmptyState
-            title="Add a release to start tracking improvements."
-            body="Generate a report from a release workspace after reviews or automated checks."
-          />
+          <EmptyState title={t("reports.emptyTitle")} body={t("reports.emptyBody")} />
         </div>
       ) : (
         <ul className="mt-4 space-y-3">
           {reports.map((r) => (
             <li key={r.id} className="rounded-[16px] border border-border bg-surface p-4">
               <p className="font-semibold">
-                Report v{r.version} · {r.id}
+                {r.release_label ?? t("reports.release")} · report v{r.version}
               </p>
               <p className="text-sm text-muted">
-                Release {r.release_id} · {r.created_at}
+                {r.environment ? `${r.environment} · ` : ""}
+                {new Date(r.created_at).toLocaleString()}
+                {r.human_sample_size != null
+                  ? ` · ${r.human_sample_size} ${
+                      r.human_sample_size === 1
+                        ? t("reports.humanReview")
+                        : t("reports.humanReviews")
+                    }`
+                  : ""}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link to={`/app/projects/${id}/reports/${r.id}`}>
-                  <Button>Open report</Button>
+                  <Button>{t("reports.open")}</Button>
                 </Link>
                 <Button variant="secondary" onClick={() => void share(r.id)}>
-                  Create redacted share link
+                  {t("reports.share")}
                 </Button>
               </div>
             </li>
@@ -119,14 +136,14 @@ export function ReportsPage() {
       )}
       {sharePath ? (
         <div className="mt-4">
-          <Notice title="Share created" tone="action">
-            <a href={sharePath}>{sharePath}</a> — revocable, screenshots omitted by default.
+          <Notice title={t("reports.shareCreated")} tone="action">
+            <a href={sharePath}>{sharePath}</a>
           </Notice>
         </div>
       ) : null}
       {error ? (
         <div className="mt-4">
-          <Notice title="Error" tone="danger">
+          <Notice title={t("common.error")} tone="danger">
             {error}
           </Notice>
         </div>

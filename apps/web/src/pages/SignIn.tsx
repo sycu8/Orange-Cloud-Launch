@@ -1,13 +1,22 @@
 import { useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import { api, setCsrfToken } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n";
 import { Button, Input, Label, Notice, PageHeader } from "../components/ui";
+
+function safeNext(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/app";
+  return raw;
+}
 
 export function SignInPage() {
   const { refresh, me, loading } = useAuth();
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const next = safeNext(params.get("next"));
+  const { t } = useI18n();
   const [displayName, setDisplayName] = useState("Local Founder");
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<string[] | null>(null);
@@ -15,7 +24,7 @@ export function SignInPage() {
   const [busy, setBusy] = useState(false);
 
   if (!loading && me && !recovery) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={next} replace />;
   }
 
   async function registerPasskey() {
@@ -62,7 +71,7 @@ export function SignInPage() {
       });
       setCsrfToken(verified.csrfToken);
       await refresh();
-      nav("/app");
+      nav(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Passkey sign-in failed");
     } finally {
@@ -80,7 +89,7 @@ export function SignInPage() {
       });
       setCsrfToken(result.csrfToken);
       await refresh();
-      nav("/app");
+      nav(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Recovery failed");
     } finally {
@@ -98,7 +107,7 @@ export function SignInPage() {
       });
       setCsrfToken(result.csrfToken);
       await refresh();
-      nav("/app");
+      nav(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dev login unavailable");
     } finally {
@@ -108,45 +117,45 @@ export function SignInPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-10">
-      <PageHeader
-        title="Sign in to OCLaunch"
-        subtitle="Passkeys are the primary identity. GitHub sign-in does not grant repository access."
-      />
+      <PageHeader title={t("signin.title")} subtitle={t("signin.subtitle")} />
       <div className="space-y-4 rounded-[16px] border border-border bg-surface p-5">
         <div>
-          <Label>Display name</Label>
+          <Label>{t("signin.displayName")}</Label>
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </div>
-        <Notice title="Local development" tone="action">
-          Fastest path on this machine: continue without a hardware authenticator. Disabled when{" "}
-          <code>APP_ENV=production</code>.
+        <Notice title={t("signin.localDev")} tone="action">
+          {t("signin.localDevBody")}
           <div className="mt-3">
             <Button disabled={busy} onClick={() => void devLogin()}>
-              Continue as local founder
+              {t("signin.continueLocal")}
             </Button>
           </div>
         </Notice>
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           <Button variant="secondary" disabled={busy} onClick={() => void registerPasskey()}>
-            Create passkey
+            {t("signin.createPasskey")}
           </Button>
           <Button variant="ghost" disabled={busy} onClick={() => void loginPasskey()}>
-            Sign in with passkey
+            {t("signin.signInPasskey")}
           </Button>
         </div>
         <div className="space-y-2 border-t border-border pt-4">
-          <Label>Recovery code</Label>
+          <Label>{t("signin.recovery")}</Label>
           <Input
             value={recoveryCode}
             onChange={(e) => setRecoveryCode(e.target.value)}
-            placeholder="Single-use code from passkey registration"
+            placeholder={t("signin.recoveryPlaceholder")}
           />
-          <Button variant="secondary" disabled={busy || !recoveryCode} onClick={() => void redeemRecovery()}>
-            Redeem recovery code
+          <Button
+            variant="secondary"
+            disabled={busy || !recoveryCode}
+            onClick={() => void redeemRecovery()}
+          >
+            {t("signin.redeem")}
           </Button>
         </div>
         {error ? (
-          <Notice title="Could not complete sign-in" tone="danger">
+          <Notice title={t("signin.error")} tone="danger">
             {error}
           </Notice>
         ) : null}
@@ -159,8 +168,8 @@ export function SignInPage() {
               ))}
             </ul>
             <div className="mt-3">
-              <Link to="/app">
-                <Button>Go to workspace</Button>
+              <Link to={next}>
+                <Button>Continue</Button>
               </Link>
             </div>
           </Notice>

@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n";
 import { PinEvidence, type ReviewPin } from "../components/PinEvidence";
 import { Button, Label, Notice, TextArea, PageHeader } from "../components/ui";
 
 export function ReviewInvitePage() {
   const { token } = useParams();
   const { me } = useAuth();
+  const { t } = useI18n();
   const [mission, setMission] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -43,13 +45,15 @@ export function ReviewInvitePage() {
   if (error && !mission) {
     return (
       <div className="mx-auto max-w-xl px-4 py-10">
-        <Notice title="Invite unavailable" tone="danger">
+        <Notice title={t("invite.unavailable")} tone="danger">
           {error}
         </Notice>
       </div>
     );
   }
-  if (!mission) return <p className="p-8 text-muted">Loading invite…</p>;
+  if (!mission) return <p className="p-8 text-muted">{t("invite.loading")}</p>;
+
+  const isOwner = Boolean(mission.isOwner);
 
   return (
     <div className="mx-auto max-w-xl px-4 py-10">
@@ -57,33 +61,38 @@ export function ReviewInvitePage() {
         title={String(mission.title)}
         subtitle={`${String(mission.projectName)} · ${String(mission.releaseLabel)}`}
       />
-      <Notice title="Mission instructions" tone="action">
+      <Notice title={t("invite.instructions")} tone="action">
         {String(mission.instructions)}
       </Notice>
       <div className="mt-4">
         <a href={String(mission.sourceUrl || mission.liveUrl)} target="_blank" rel="noreferrer">
-          <Button variant="secondary">Open target app in new tab</Button>
+          <Button variant="secondary">{t("invite.openTarget")}</Button>
         </a>
       </div>
       {!me ? (
         <div className="mt-6">
-          <Notice title="Sign in to submit" tone="neutral">
-            <Link to="/signin">Sign in</Link> first. Self-review by the project owner is blocked.
+          <Notice title={t("invite.signInTitle")} tone="neutral">
+            <Link to={`/signin?next=/review/${token}`}>{t("nav.signIn")}</Link>.{" "}
+            {t("invite.signInBody")}
+          </Notice>
+        </div>
+      ) : isOwner ? (
+        <div className="mt-6">
+          <Notice title={t("invite.selfBlockedTitle")} tone="action">
+            {t("invite.selfBlockedBody")}
           </Notice>
         </div>
       ) : done ? (
         <div className="mt-6">
-          <Notice title="Review submitted" tone="positive">
-            Thank you. Useful critical feedback earns recognition — praise is not required.
+          <Notice title={t("invite.submittedTitle")} tone="positive">
+            {t("invite.submittedBody")}
           </Notice>
         </div>
       ) : (
         <form onSubmit={(e) => void submit(e)} className="mt-6 space-y-3">
-          <p className="font-semibold">
-            What happened, what did you expect, and where did you get stuck?
-          </p>
+          <p className="font-semibold">{t("invite.prompt")}</p>
           <div>
-            <Label>What you tried</Label>
+            <Label>{t("inbox.tried")}</Label>
             <TextArea
               required
               value={form.tried}
@@ -91,7 +100,7 @@ export function ReviewInvitePage() {
             />
           </div>
           <div>
-            <Label>What you expected</Label>
+            <Label>{t("inbox.expected")}</Label>
             <TextArea
               required
               value={form.expected}
@@ -99,14 +108,14 @@ export function ReviewInvitePage() {
             />
           </div>
           <div>
-            <Label>Where you got stuck</Label>
+            <Label>{t("inbox.stuck")}</Label>
             <TextArea
               value={form.stuck}
               onChange={(e) => setForm((f) => ({ ...f, stuck: e.target.value }))}
             />
           </div>
           <div>
-            <Label>Observations</Label>
+            <Label>{t("inbox.observations")}</Label>
             <TextArea
               required
               value={form.observations}
@@ -120,37 +129,37 @@ export function ReviewInvitePage() {
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label>Audience fit</Label>
+              <Label>{t("inbox.audienceFit")}</Label>
               <select
                 className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
                 value={form.audienceFit}
                 onChange={(e) => setForm((f) => ({ ...f, audienceFit: e.target.value }))}
               >
-                <option value="target_user">Target user</option>
-                <option value="peer">Peer reviewer</option>
-                <option value="unknown">Unknown</option>
+                <option value="target_user">{t("inbox.fit.target")}</option>
+                <option value="peer">{t("inbox.fit.peer")}</option>
+                <option value="unknown">{t("inbox.fit.unknown")}</option>
               </select>
             </div>
             <div>
-              <Label>Outcome</Label>
+              <Label>{t("inbox.outcome")}</Label>
               <select
                 className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
                 value={form.outcome}
                 onChange={(e) => setForm((f) => ({ ...f, outcome: e.target.value }))}
               >
-                <option value="completed">Completed</option>
-                <option value="with_help">Completed with help</option>
-                <option value="could_not_complete">Could not complete</option>
-                <option value="not_attempted">Not attempted</option>
+                <option value="completed">{t("inbox.out.completed")}</option>
+                <option value="with_help">{t("inbox.out.withHelp")}</option>
+                <option value="could_not_complete">{t("inbox.out.couldNot")}</option>
+                <option value="not_attempted">{t("inbox.out.notAttempted")}</option>
               </select>
             </div>
           </div>
           {error ? (
-            <Notice title="Could not submit" tone="danger">
+            <Notice title={t("invite.submitError")} tone="danger">
               {error}
             </Notice>
           ) : null}
-          <Button type="submit">Submit review</Button>
+          <Button type="submit">{t("inbox.submit")}</Button>
         </form>
       )}
     </div>

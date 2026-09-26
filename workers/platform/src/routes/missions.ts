@@ -7,6 +7,18 @@ import { audit, requireMember } from "../db/access.js";
 
 const MAX_EVIDENCE_BYTES = 2_000_000;
 
+function humanFindingTitle(data: {
+  stuck: string;
+  observations: string;
+  outcome: string;
+}): string {
+  const stuck = data.stuck.trim();
+  if (stuck) return stuck.length > 120 ? `${stuck.slice(0, 117)}…` : stuck;
+  const obs = data.observations.trim().split(/\n/)[0] ?? "";
+  if (obs) return obs.length > 120 ? `${obs.slice(0, 117)}…` : obs;
+  return `Review: ${data.outcome.replaceAll("_", " ")}`;
+}
+
 async function storeReviewEvidence(
   c: Context<AppEnv>,
   projectId: string,
@@ -107,7 +119,8 @@ missionRoutes.get("/invite/:token", async (c) => {
   const token = c.req.param("token");
   const hash = await sha256Hex(token);
   const mission = await c.env.DB.prepare(
-    `SELECT m.*, p.name as project_name, p.slug, p.live_url, r.source_url, r.label as release_label
+    `SELECT m.*, p.name as project_name, p.slug, p.live_url, p.owner_id,
+            r.source_url, r.label as release_label
      FROM missions m
      JOIN projects p ON p.id = m.project_id
      JOIN releases r ON r.project_id = m.project_id AND r.id = m.release_id
@@ -120,6 +133,7 @@ missionRoutes.get("/invite/:token", async (c) => {
       nextAction: "Ask the founder for a new review invite link",
     });
   }
+  const userId = c.get("userId");
   // Redacted: never expose private repo/integration data
   return jsonOk(c, {
     mission: {
@@ -133,6 +147,7 @@ missionRoutes.get("/invite/:token", async (c) => {
       liveUrl: mission.live_url,
       sourceUrl: mission.source_url,
       releaseLabel: mission.release_label,
+      isOwner: Boolean(userId && userId === mission.owner_id),
     },
   });
 });
@@ -191,8 +206,15 @@ async function submitReviewForMission(
       mission.release_id,
       reviewId,
       parsed.data.outcome === "could_not_complete" ? "high" : "medium",
-      `Reviewer outcome: ${parsed.data.outcome.replaceAll("_", " ")}`,
-      `${parsed.data.tried}\n\nExpected: ${parsed.data.expected}\nStuck: ${parsed.data.stuck}\n\n${parsed.data.observations}`,
+      humanFindingTitle(parsed.data),
+      [
+        `Tried: ${parsed.data.tried}`,
+        `Expected: ${parsed.data.expected}`,
+        parsed.data.stuck ? `Stuck: ${parsed.data.stuck}` : null,
+        `Observations: ${parsed.data.observations}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       "A subsequent reviewer matching the audience can complete the mission without the same stuck point.",
       ts,
       ts,

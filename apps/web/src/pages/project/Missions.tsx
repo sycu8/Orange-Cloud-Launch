@@ -106,7 +106,10 @@ export function MissionsPage() {
                 <p className="font-semibold">{m.title}</p>
                 <p className="text-sm text-muted">{m.instructions}</p>
                 <p className="mt-2 text-xs text-muted">
-                  {m.state} · release {m.release_id}
+                  {m.state}
+                  {data.releases.find((r) => r.id === m.release_id)
+                    ? ` · ${data.releases.find((r) => r.id === m.release_id)!.label}`
+                    : ""}
                 </p>
                 {m.state === "open" ? (
                   <Button

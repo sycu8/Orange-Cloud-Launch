@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useI18n } from "../lib/i18n";
 import { Button, Input, Label, Notice, PageHeader, TextArea } from "../components/ui";
 
 export function NewProjectPage() {
   const { me, loading } = useAuth();
+  const { t } = useI18n();
   const nav = useNavigate();
   const [form, setForm] = useState({
     name: "",
@@ -21,8 +23,8 @@ export function NewProjectPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (loading) return <p className="text-muted">Loading…</p>;
-  if (!me) return <Navigate to="/signin" replace />;
+  if (loading) return <p className="text-muted">{t("common.loading")}</p>;
+  if (!me) return <Navigate to="/signin?next=/app/new" replace />;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,13 +50,10 @@ export function NewProjectPage() {
 
   return (
     <div className="max-w-xl">
-      <PageHeader
-        title="Add your project"
-        subtitle="Visibility defaults to private. Public directory listing is opt-in."
-      />
+      <PageHeader title={t("project.new.title")} subtitle={t("project.new.subtitle")} />
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <div>
-          <Label>Name</Label>
+          <Label>{t("project.new.name")}</Label>
           <Input
             required
             value={form.name}
@@ -74,7 +73,7 @@ export function NewProjectPage() {
           />
         </div>
         <div>
-          <Label>Slug</Label>
+          <Label>{t("project.new.slug")}</Label>
           <Input
             required
             value={form.slug}
@@ -82,7 +81,7 @@ export function NewProjectPage() {
           />
         </div>
         <div>
-          <Label>Purpose</Label>
+          <Label>{t("project.new.purpose")}</Label>
           <TextArea
             required
             value={form.purpose}
@@ -90,7 +89,7 @@ export function NewProjectPage() {
           />
         </div>
         <div>
-          <Label>Target audience</Label>
+          <Label>{t("project.new.audience")}</Label>
           <Input
             required
             value={form.audience}
@@ -98,15 +97,15 @@ export function NewProjectPage() {
           />
         </div>
         <div>
-          <Label>Primary user task</Label>
+          <Label>{t("project.new.primaryTask")}</Label>
           <Input
             value={form.primaryTask}
             onChange={(e) => setForm((f) => ({ ...f, primaryTask: e.target.value }))}
-            placeholder="Create your first weekly plan without help"
+            placeholder={t("project.new.primaryTaskPh")}
           />
         </div>
         <div>
-          <Label>Live URL</Label>
+          <Label>{t("project.new.liveUrl")}</Label>
           <Input
             type="url"
             value={form.liveUrl}
@@ -115,24 +114,24 @@ export function NewProjectPage() {
           />
         </div>
         <div>
-          <Label>Visibility</Label>
+          <Label>{t("project.new.visibility")}</Label>
           <select
             className="min-h-[44px] w-full rounded-[10px] border border-input-border bg-surface px-3"
             value={form.visibility}
             onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value }))}
           >
-            <option value="private">Private</option>
-            <option value="unlisted">Unlisted (passport link only)</option>
-            <option value="public">Public (discoverable)</option>
+            <option value="private">{t("project.new.private")}</option>
+            <option value="unlisted">{t("project.new.unlisted")}</option>
+            <option value="public">{t("project.new.public")}</option>
           </select>
         </div>
         {error ? (
-          <Notice title="Could not create project" tone="danger">
+          <Notice title={t("project.new.error")} tone="danger">
             {error}
           </Notice>
         ) : null}
         <Button type="submit" disabled={busy}>
-          Create project
+          {t("project.new.create")}
         </Button>
       </form>
     </div>

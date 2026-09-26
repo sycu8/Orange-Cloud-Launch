@@ -85,8 +85,13 @@ reportRoutes.get("/projects/:projectId/reports", async (c) => {
   const role = await requireMember(c, projectId);
   if (!role) return jsonErr(c, "FORBIDDEN", "No access", 403);
   const rows = await c.env.DB.prepare(
-    `SELECT id, release_id, version, ruleset_version, created_at FROM reports
-     WHERE project_id = ? ORDER BY created_at DESC`,
+    `SELECT r.id, r.release_id, r.version, r.ruleset_version, r.created_at,
+            rel.label as release_label,
+            json_extract(r.summary_json, '$.environment') as environment,
+            json_extract(r.summary_json, '$.human_reviews.sample_size') as human_sample_size
+     FROM reports r
+     JOIN releases rel ON rel.project_id = r.project_id AND rel.id = r.release_id
+     WHERE r.project_id = ? ORDER BY r.created_at DESC`,
   )
     .bind(projectId)
     .all();

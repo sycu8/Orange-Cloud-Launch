@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 import { Button, EmptyState, Notice, StatusPill } from "../../components/ui";
 
 type ReportSummary = {
@@ -51,6 +52,7 @@ function outcomeLabel(key: string) {
 
 export function ReportDetailPage() {
   const { id, reportId } = useParams();
+  const { t } = useI18n();
   const [report, setReport] = useState<ReportRow | null>(null);
   const [sharePath, setSharePath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,12 +79,14 @@ export function ReportDetailPage() {
 
   if (error && !report) {
     return (
-      <Notice title="Report unavailable" tone="danger">
-        {error}
+      <Notice title={t("reports.notFound")} tone="danger">
+        {error.includes("NOT_FOUND") || /not found/i.test(error)
+          ? t("reports.notFoundBody")
+          : error}
       </Notice>
     );
   }
-  if (!report) return <p className="text-muted">Loading report…</p>;
+  if (!report) return <p className="text-muted">{t("reports.loading")}</p>;
 
   const summary = report.summary ?? {};
   const counts = summary.counts_by_state ?? {};
@@ -95,7 +99,7 @@ export function ReportDetailPage() {
     <div>
       <p className="text-sm text-muted">
         <Link to={`/app/projects/${id}/reports`} className="text-muted">
-          Reports
+          {t("nav.reports")}
         </Link>{" "}
         / v{report.version}
       </p>
@@ -103,52 +107,50 @@ export function ReportDetailPage() {
         <div>
           <h2 className="text-2xl font-bold">{summary.label ?? `Report v${report.version}`}</h2>
           <p className="mt-1 text-sm text-muted">
-            Captured {summary.captured_at ?? report.created_at}
+            {t("reports.captured")} {summary.captured_at ?? report.created_at}
             {summary.commit_sha ? ` · ${summary.commit_sha}` : ""}
-            {` · ruleset ${summary.ruleset_version ?? report.ruleset_version}`}
+            {` · ${t("reports.ruleset")} ${summary.ruleset_version ?? report.ruleset_version}`}
           </p>
           <p className="mt-1 text-sm text-muted">
-            Environment: <strong>{summary.environment ?? "preview"}</strong>
-            {summary.reviewed_url ? ` · tried ${summary.reviewed_url}` : ""}
+            {t("reports.environment")}: <strong>{summary.environment ?? "preview"}</strong>
+            {summary.reviewed_url ? ` · ${t("reports.tried")} ${summary.reviewed_url}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link to={`/app/projects/${id}/releases/${report.release_id}`}>
-            <Button variant="secondary">Open release</Button>
+            <Button variant="secondary">{t("reports.openRelease")}</Button>
           </Link>
-          <Button onClick={() => void share()}>Create redacted share</Button>
+          <Button onClick={() => void share()}>{t("reports.createShare")}</Button>
         </div>
       </div>
 
       {summary.environment_gap ? (
         <div className="mt-4">
-          <Notice title="Reviewed URL is not the live URL" tone="danger">
+          <Notice title={t("reports.envGapTitle")} tone="danger">
             <p>{summary.environment_gap.message}</p>
             <p className="mt-1">
-              Tried: {summary.environment_gap.reviewedUrl}
+              {t("findings.tried")}: {summary.environment_gap.reviewedUrl}
               <br />
-              Live: {summary.environment_gap.liveUrl}
+              {t("reports.live")}: {summary.environment_gap.liveUrl}
             </p>
-            <p className="mt-1">
-              Do not claim production verification from a localhost or preview try.
-            </p>
+            <p className="mt-1">{t("reports.envGapWarn")}</p>
           </Notice>
         </div>
       ) : (
         <div className="mt-4">
-          <Notice title="Evidence-based snapshot" tone="action">
-            {summary.note ?? "No universal readiness score. Coverage and concrete outcomes only."}
+          <Notice title={t("reports.snapshotTitle")} tone="action">
+            {summary.note ?? t("reports.snapshotDefault")}
           </Notice>
         </div>
       )}
 
-      <h3 className="mt-8 text-lg font-semibold">Human outcomes</h3>
+      <h3 className="mt-8 text-lg font-semibold">{t("reports.humanOutcomes")}</h3>
       <p className="text-sm text-muted">
-        Sample size {summary.human_reviews?.sample_size ?? 0}.{" "}
+        {t("reports.sampleSize")} {summary.human_reviews?.sample_size ?? 0}.{" "}
         {summary.human_reviews?.note ?? "could_not_complete counts as useful critical feedback."}
       </p>
       {outcomeEntries.length === 0 ? (
-        <p className="mt-2 text-sm text-muted">No community reviews attached to this release yet.</p>
+        <p className="mt-2 text-sm text-muted">{t("reports.noCommunity")}</p>
       ) : (
         <ul className="mt-3 flex flex-wrap gap-2">
           {outcomeEntries.map(([key, n]) => (
@@ -161,17 +163,15 @@ export function ReportDetailPage() {
         </ul>
       )}
 
-      <h3 className="mt-8 text-lg font-semibold">Reopened &amp; not rechecked</h3>
+      <h3 className="mt-8 text-lg font-semibold">{t("reports.reopened")}</h3>
       {(summary.reopened_findings?.length ?? 0) === 0 &&
       (summary.verified_not_rechecked?.length ?? 0) === 0 ? (
-        <p className="mt-2 text-sm text-muted">
-          No reopened findings and no prior verified titles missing from this release.
-        </p>
+        <p className="mt-2 text-sm text-muted">{t("reports.reopenedNone")}</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {(summary.reopened_findings ?? []).map((f) => (
             <li key={f.id} className="rounded-[12px] border border-border bg-surface px-3 py-2 text-sm">
-              Reopened: {f.title}
+              {t("reports.reopenedItem")}: {f.title}
             </li>
           ))}
           {(summary.verified_not_rechecked ?? []).map((f) => (
@@ -179,20 +179,20 @@ export function ReportDetailPage() {
               key={f.title}
               className="rounded-[12px] border border-border bg-surface px-3 py-2 text-sm"
             >
-              Verified previously, not rechecked: {f.title}
+              {t("reports.notRechecked")}: {f.title}
             </li>
           ))}
         </ul>
       )}
 
-      <h3 className="mt-8 text-lg font-semibold">Untested scope</h3>
+      <h3 className="mt-8 text-lg font-semibold">{t("reports.untested")}</h3>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
         {(summary.untested_scope ?? []).map((s) => (
           <li key={s}>{s}</li>
         ))}
       </ul>
 
-      <h3 className="mt-8 text-lg font-semibold">Next three actions</h3>
+      <h3 className="mt-8 text-lg font-semibold">{t("reports.nextThree")}</h3>
       <ol className="mt-2 list-decimal space-y-2 pl-5">
         {(summary.next_three_actions ?? []).map((a) => (
           <li key={a}>{a}</li>
@@ -201,11 +201,11 @@ export function ReportDetailPage() {
 
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
         <div className="rounded-[16px] border border-border bg-surface p-4">
-          <p className="text-sm text-muted">Verified</p>
+          <p className="text-sm text-muted">{t("reports.verified")}</p>
           <p className="text-2xl font-bold text-positive">{counts.verified ?? 0}</p>
         </div>
         <div className="rounded-[16px] border border-border bg-surface p-4">
-          <p className="text-sm text-muted">Still open</p>
+          <p className="text-sm text-muted">{t("reports.stillOpen")}</p>
           <p className="text-2xl font-bold">
             {(counts.observed ?? 0) +
               (counts.triaged ?? 0) +
@@ -214,17 +214,20 @@ export function ReportDetailPage() {
           </p>
         </div>
         <div className="rounded-[16px] border border-border bg-surface p-4">
-          <p className="text-sm text-muted">Human observations</p>
+          <p className="text-sm text-muted">{t("reports.humanObs")}</p>
           <p className="text-2xl font-bold">
             {summary.counts_by_provenance?.human_observation ?? humanFindings.length}
           </p>
         </div>
       </div>
 
-      <h3 className="mt-8 text-lg font-semibold">Findings (human first)</h3>
+      <h3 className="mt-8 text-lg font-semibold">{t("reports.findingsHumanFirst")}</h3>
       {findings.length === 0 ? (
         <div className="mt-3">
-          <EmptyState title="No findings in this snapshot" body="Generate again after reviews." />
+          <EmptyState
+            title={t("reports.noFindingsSnap")}
+            body={t("reports.noFindingsSnapBody")}
+          />
         </div>
       ) : (
         <ul className="mt-3 space-y-3">
@@ -247,20 +250,20 @@ export function ReportDetailPage() {
 
       {summary.previous_release ? (
         <p className="mt-6 text-sm text-muted">
-          Previous release context: {summary.previous_release.label}
+          {t("reports.previous")}: {summary.previous_release.label}
         </p>
       ) : null}
 
       {sharePath ? (
         <div className="mt-6">
-          <Notice title="Share created" tone="positive">
-            <a href={sharePath}>{sharePath}</a> — revocable; screenshots omitted by default.
+          <Notice title={t("reports.shareCreated")} tone="positive">
+            <a href={sharePath}>{sharePath}</a> — {t("reports.shareRevocable")}
           </Notice>
         </div>
       ) : null}
       {error ? (
         <div className="mt-4">
-          <Notice title="Error" tone="danger">
+          <Notice title={t("common.error")} tone="danger">
             {error}
           </Notice>
         </div>

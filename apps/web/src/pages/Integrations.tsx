@@ -1,12 +1,15 @@
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { Notice, PageHeader, StatusPill } from "../components/ui";
 
+/** Hidden from primary nav until the founder loop is solid. Keep an honest short page. */
 export function IntegrationsPage() {
-  const { me } = useAuth();
-  const flags = me?.integrations;
+  const { me, loading } = useAuth();
+  if (loading) return <p className="text-muted">Loading…</p>;
+  if (!me) return <Navigate to="/signin?next=/app/settings/integrations" replace />;
+  const flags = me.integrations;
 
   const rows = [
-    ["Passkeys", true, "Primary identity with recovery codes"],
     ["GitHub App", flags?.github, "Selected-repo broker for draft PRs"],
     ["Browser Run", flags?.browserRun, "Viewport captures and journey checks"],
     ["Workers AI", flags?.workersAi, "Labeled model suggestions only"],
@@ -18,7 +21,7 @@ export function IntegrationsPage() {
     <div>
       <PageHeader
         title="Integrations"
-        subtitle="Missing credentials produce an honest not-configured state — never a fake success."
+        subtitle="Missing credentials stay not configured — never a fake success."
       />
       <ul className="divide-y divide-border border-y border-border">
         {rows.map(([name, enabled, detail]) => (
@@ -28,16 +31,16 @@ export function IntegrationsPage() {
               <p className="text-sm text-muted">{detail}</p>
             </div>
             <StatusPill tone={enabled ? "positive" : "action"}>
-              {enabled ? "Configured" : "Not configured"}
+              {enabled ? "Connected" : "Not connected yet"}
             </StatusPill>
           </li>
         ))}
       </ul>
       <div className="mt-6">
-        <Notice title="Owner actions required for remote features" tone="neutral">
-          Provision D1/R2 IDs, GitHub App secrets, Browser Rendering, Workers AI, and Sandbox
-          bindings. Approve DNS inventory before enabling project-domain gateway routes. See{" "}
-          <code>docs/deployment.md</code>.
+        <Notice title="Credential-gated" tone="neutral">
+          Browser Run, Sandbox, GitHub draft PR, and live DNS stay{" "}
+          <code>integration_not_configured</code> until the owner provisions them. Passkeys are
+          available on Sign in when your environment supports WebAuthn.
         </Notice>
       </div>
     </div>
