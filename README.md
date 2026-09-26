@@ -51,4 +51,4 @@ UI: `http://localhost:5173` · API: `http://localhost:8787` (passkey CSRF allows
 
 ## Status
 
-This repository implements the OCLaunch MVP control plane and UI. GitHub draft PR, Browser Run human-tester snapshots, Workers AI suggestions, Sandbox builds, and live project-domain DNS require owner credentials and deploy approval — see Integrations in the app and `docs/deployment.md`.
+This repository implements the OCLaunch MVP control plane and UI. Browser Run human-tester snapshots are on by default. GitHub draft PR, Workers AI suggestions, Sandbox builds, and live project-domain DNS require owner credentials and deploy approval — see Integrations in the app and `docs/deployment.md`.

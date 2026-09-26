@@ -26,14 +26,14 @@ See also `docs/oclaunch-architecture.svg` and `docs/control-plane.mmd` from the 
 | `ASSETS` | Static Assets | SPA shell | HTTP | SPA fallback / 503 if unbuilt |
 | `DB` | D1 | Projects, ACL, findings, outbox | Prepared SQL | Structured 5xx |
 | `ARTIFACTS` | R2 | Evidence, exports, reports | Stream I/O | Structured errors |
-| vars | Worker vars | Origins, feature flags | Read-only | Safe defaults (`*_false`) |
+| `BROWSER` | Browser Run | Human-tester viewport snapshots (on by default) | Quick Actions | Access finding on a bot challenge; no WAF bypass |
+| vars | Worker vars | Origins, feature flags | Read-only | Browser Run defaults on; other flags default off |
 
 ### Deferred (adapters present, not provisioned)
 
 | Binding | Purpose | Honest state when missing |
 |---------|---------|---------------------------|
 | `JOBS` queue | Async ingress | Sync outbox processor in-process |
-| `BROWSER` | Human-tester viewport snapshots + route discovery via Browser Run Quick Actions | `integration_not_configured` (never claims screenshots); challenge pages become Access findings — no WAF bypass |
 | `AI` | Model suggestions | Empty suggestions (no fakes) |
 | `GITHUB` service | Draft PR broker | Webhook/PR disabled |
 | `BUILDER` / Sandbox | Isolated builds | Patch job not-configured |

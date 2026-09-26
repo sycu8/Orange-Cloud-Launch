@@ -42,7 +42,7 @@ export function IntegrationsPage() {
       </ul>
       <div className="mt-6">
         <Notice title="Credential-gated" tone="neutral">
-          Browser Run, Sandbox, GitHub draft PR, and live DNS stay{" "}
+          Browser Run is on by default. Sandbox, GitHub draft PR, and live DNS stay{" "}
           <code>integration_not_configured</code> until the owner provisions them. Passkeys are
           available on Sign in when your environment supports WebAuthn.
         </Notice>
