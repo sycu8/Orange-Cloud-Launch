@@ -9,7 +9,7 @@ workers_dev = true
 directory = "../../apps/web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/p/*", "/r/*", "/", "/index.html", "/favicon.svg", "/assets/*", "/robots.txt", "/sitemap.xml"]
+run_worker_first = ["/api/*", "/p/*", "/r/*", "/", "/index.html", "/favicon.svg", "/assets/*", "/robots.txt", "/sitemap.xml", "/.well-known/*", "/auth.md", "/openapi.json", "/docs/*", "/mcp", "/agent/*", "/oauth/*"]
 
 [observability]
 enabled = true

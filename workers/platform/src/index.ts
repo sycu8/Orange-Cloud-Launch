@@ -26,8 +26,10 @@ import { relayOutbox } from "./jobs/outbox.js";
 import { runCleanup } from "./jobs/cleanup.js";
 import { isIndexableHost, robotsTxt, sitemapXml } from "./lib/seo.js";
 import { publicStaticKey, staticObjectResponse } from "./lib/static-files.js";
+import { HOMEPAGE_LINK_HEADER } from "./lib/agent-discovery.js";
+import { discoveryRoutes } from "./routes/discovery.js";
 
-const app = new Hono<AppEnv>();
+export const app = new Hono<AppEnv>();
 
 app.use("*", async (c, next) => {
   c.set("requestId", newId("req"));
@@ -40,6 +42,9 @@ app.use("*", async (c, next) => {
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
   );
+  if (new URL(c.req.url).pathname === "/") {
+    c.header("Link", HOMEPAGE_LINK_HEADER);
+  }
 });
 
 app.use("/api/*", async (c, next) => {
@@ -102,6 +107,7 @@ app.route("/api", domainRoutes);
 app.route("/api", artifactRoutes);
 app.route("/api/integrations", integrationRoutes);
 app.route("/api", publicRoutes);
+app.route("/", discoveryRoutes);
 
 app.post("/api/internal/cleanup", async (c) => {
   if (!(await maintenanceAuthorized(c))) {

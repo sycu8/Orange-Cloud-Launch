@@ -23,6 +23,13 @@ export function jsonErr(
   opts?: { retryable?: boolean; nextAction?: string },
 ) {
   const body: ApiErrorBody = apiError(code, message, c.get("requestId"), opts);
+  if (status === 401) {
+    const origin = new URL(c.req.url).origin;
+    c.header(
+      "WWW-Authenticate",
+      `Bearer realm="oclaunch", resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
+    );
+  }
   return c.json(body, status);
 }
 

@@ -13,6 +13,8 @@ export const homeEn: Record<string, string> = {
   "home.nav.value": "Value",
   "home.nav.where": "Vietnam and beyond",
   "home.nav.faq": "Questions",
+  "home.nav.jump": "Jump to a section",
+  "home.nav.go": "Show section",
 
   "home.project.kicker": "The project",
   "home.project.title": "A landing page for the release you are about to ship",
@@ -171,6 +173,8 @@ export const homeVi: Record<string, string> = {
   "home.nav.value": "Giá trị",
   "home.nav.where": "Việt Nam và nơi khác",
   "home.nav.faq": "Câu hỏi",
+  "home.nav.jump": "Nhảy tới một mục",
+  "home.nav.go": "Xem mục",
 
   "home.project.kicker": "Dự án",
   "home.project.title": "Trang giới thiệu cho bản phát hành bạn sắp đưa ra",

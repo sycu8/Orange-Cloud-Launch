@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { LanguageSelect, useI18n } from "../lib/i18n";
 import { Button } from "./ui";
@@ -8,6 +8,7 @@ import iconUrl from "../assets/oclaunch-icon.svg";
 export function MarketingShell() {
   const { me, logout } = useAuth();
   const { t } = useI18n();
+  const location = useLocation();
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-border/60 bg-canvas/90 backdrop-blur">
@@ -47,6 +48,7 @@ export function MarketingShell() {
       <Outlet />
       <footer className="border-t border-border bg-surface/50">
         <div className="mx-auto max-w-6xl px-4 py-8">
+          {location.pathname === "/" ? <SectionJumpForm /> : null}
           <nav aria-label={t("home.footer.nav")} className="mb-4 flex flex-wrap gap-x-4 gap-y-1">
             <a href="/#project" className="inline-flex min-h-[44px] items-center text-sm font-semibold">
               {t("home.nav.project")}
@@ -82,6 +84,59 @@ export function MarketingShell() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function SectionJumpForm() {
+  const { t } = useI18n();
+  const formRef = useRef<HTMLFormElement>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    formRef.current?.setAttribute("toolname", "jump_to_section");
+    formRef.current?.setAttribute(
+      "tooldescription",
+      "Jump to a section of the OCLaunch homepage.",
+    );
+    selectRef.current?.setAttribute(
+      "toolparamdescription",
+      "Homepage section: project, how-it-works, how-to, value, where, or faq.",
+    );
+  }, []);
+  return (
+    <form
+      ref={formRef}
+      className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end"
+      action="/#project"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const section = selectRef.current?.value || "project";
+        document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.history.replaceState(null, "", `/#${section}`);
+      }}
+    >
+      <label className="text-sm font-semibold text-ink">
+        {t("home.nav.jump")}
+        <select
+          ref={selectRef}
+          name="section"
+          defaultValue="project"
+          className="mt-1 block min-h-11 w-full rounded-[10px] border border-input-border bg-surface px-3 text-base text-ink sm:w-64"
+        >
+          <option value="project">{t("home.nav.project")}</option>
+          <option value="how-it-works">{t("home.nav.how")}</option>
+          <option value="how-to">{t("home.nav.howto")}</option>
+          <option value="value">{t("home.nav.value")}</option>
+          <option value="where">{t("home.nav.where")}</option>
+          <option value="faq">{t("home.nav.faq")}</option>
+        </select>
+      </label>
+      <button
+        type="submit"
+        className="inline-flex min-h-11 items-center justify-center rounded-[10px] bg-action px-4 font-semibold text-white"
+      >
+        {t("home.nav.go")}
+      </button>
+    </form>
   );
 }
 

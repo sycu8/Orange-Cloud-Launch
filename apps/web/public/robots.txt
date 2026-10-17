@@ -3,5 +3,7 @@ Allow: /
 Disallow: /app/
 Disallow: /signin
 Disallow: /review/
+Content-Signal: ai-train=no, search=yes, ai-input=no
 
 Sitemap: https://launch.orangecloud.vn/sitemap.xml
+Agentmap: https://launch.orangecloud.vn/.well-known/ai-catalog.json

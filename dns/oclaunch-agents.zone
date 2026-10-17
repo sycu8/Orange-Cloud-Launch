@@ -1,0 +1,39 @@
+; DNS for AI Discovery (DNS-AID) records for OCLaunch.
+; Draft: draft-mozleywilliams-dnsop-dnsaid
+; SVCB/HTTPS parameters follow RFC 9460.
+;
+; Publish these in the orangecloud.vn zone. They do not replace the A/AAAA/CNAME
+; records that already send launch.orangecloud.vn and launch-staging.orangecloud.vn
+; to the Workers custom domains.
+;
+; Sign the public zone with DNSSEC so validating resolvers return Authenticated
+; Data (AD). Experimental DNS-AID SvcParams (bap, well-known, cap) do not have
+; IANA key numbers yet, so these records use the registered alpn and port keys.
+;
+; After publication, confirm with DNS-over-HTTPS:
+;   https://cloudflare-dns.com/dns-query?name=_index._agents.launch.orangecloud.vn&type=HTTPS
+;   https://cloudflare-dns.com/dns-query?name=_index._agents.launch.orangecloud.vn&type=SVCB
+
+$ORIGIN orangecloud.vn.
+$TTL 3600
+
+; Site hostname: launch.orangecloud.vn
+_index._agents.launch    3600 IN HTTPS 1 launch.orangecloud.vn. alpn="h2" port=443
+_index._agents.launch    3600 IN SVCB  1 launch.orangecloud.vn. alpn="h2" port=443 mandatory=alpn,port
+_mcp._agents.launch      3600 IN HTTPS 1 launch.orangecloud.vn. alpn="h2" port=443
+_mcp._agents.launch      3600 IN SVCB  1 launch.orangecloud.vn. alpn="h2" port=443 mandatory=alpn,port
+_catalog._agents.launch  3600 IN TXT   "url=https://launch.orangecloud.vn/.well-known/ai-catalog.json"
+
+; Registrable domain, for resolvers that query _agents.orangecloud.vn
+_index._agents           3600 IN HTTPS 1 launch.orangecloud.vn. alpn="h2" port=443
+_index._agents           3600 IN SVCB  1 launch.orangecloud.vn. alpn="h2" port=443 mandatory=alpn,port
+_mcp._agents             3600 IN HTTPS 1 launch.orangecloud.vn. alpn="h2" port=443
+_mcp._agents             3600 IN SVCB  1 launch.orangecloud.vn. alpn="h2" port=443 mandatory=alpn,port
+_catalog._agents         3600 IN TXT   "url=https://launch.orangecloud.vn/.well-known/ai-catalog.json"
+
+; Staging hostname: launch-staging.orangecloud.vn
+_index._agents.launch-staging    3600 IN HTTPS 1 launch-staging.orangecloud.vn. alpn="h2" port=443
+_index._agents.launch-staging    3600 IN SVCB  1 launch-staging.orangecloud.vn. alpn="h2" port=443 mandatory=alpn,port
+_mcp._agents.launch-staging      3600 IN HTTPS 1 launch-staging.orangecloud.vn. alpn="h2" port=443
+_mcp._agents.launch-staging      3600 IN SVCB  1 launch-staging.orangecloud.vn. alpn="h2" port=443 mandatory=alpn,port
+_catalog._agents.launch-staging  3600 IN TXT   "url=https://launch-staging.orangecloud.vn/.well-known/ai-catalog.json"

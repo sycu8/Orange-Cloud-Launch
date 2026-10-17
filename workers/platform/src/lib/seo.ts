@@ -6,9 +6,27 @@ export function isIndexableHost(hostname: string): boolean {
   return hostname === PRODUCTION_HOST;
 }
 
+function agentCatalogUrl(hostname: string): string {
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return `http://${hostname}/.well-known/ai-catalog.json`;
+  }
+  if (isIndexableHost(hostname)) {
+    return `${PRODUCTION_ORIGIN}/.well-known/ai-catalog.json`;
+  }
+  return `https://${hostname}/.well-known/ai-catalog.json`;
+}
+
 export function robotsTxt(hostname: string): string {
+  const agentmap = `Agentmap: ${agentCatalogUrl(hostname)}`;
   if (!isIndexableHost(hostname)) {
-    return "User-agent: *\nDisallow: /\n";
+    return [
+      "User-agent: *",
+      "Disallow: /",
+      "Content-Signal: ai-train=no, search=no, ai-input=no",
+      "",
+      agentmap,
+      "",
+    ].join("\n");
   }
   return [
     "User-agent: *",
@@ -16,8 +34,10 @@ export function robotsTxt(hostname: string): string {
     "Disallow: /app/",
     "Disallow: /signin",
     "Disallow: /review/",
+    "Content-Signal: ai-train=no, search=yes, ai-input=no",
     "",
     `Sitemap: ${PRODUCTION_ORIGIN}/sitemap.xml`,
+    agentmap,
     "",
   ].join("\n");
 }
