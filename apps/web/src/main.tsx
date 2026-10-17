@@ -22,7 +22,10 @@ import { ChangeDetailPage } from "./pages/project/ChangeDetail";
 import { ReportsPage } from "./pages/project/Reports";
 import { ReportDetailPage } from "./pages/project/ReportDetail";
 import { ProjectSettingsPage } from "./pages/project/ProjectSettings";
+import { registerWebMcpTools } from "./lib/webmcp";
 import "./styles/app.css";
+
+registerWebMcpTools();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

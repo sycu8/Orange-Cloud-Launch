@@ -23,6 +23,10 @@ Do **not** deploy, change live DNS, or send invitations without explicit owner a
 
 Staging may still be reachable on `*.workers.dev`; that origin is listed in `APP_ORIGINS_EXTRA` only.
 
+## Agent discovery DNS
+
+HTTP discovery (Link headers, `robots.txt` Content Signals, `/.well-known/*`, `/auth.md`, `/mcp`) is served by the Worker. DNS for AI Discovery is not. Publish `dns/oclaunch-agents.zone` in the `orangecloud.vn` zone and sign that zone with DNSSEC. The records are ServiceMode HTTPS and SVCB at `_index._agents` and `_mcp._agents`, plus a `_catalog._agents` TXT record. They do not replace the custom-domain records for `launch` or `launch-staging`.
+
 ## Staging
 
 ```bash

@@ -15,6 +15,15 @@ describe("public SEO routes", () => {
     expect(production).toContain("Allow: /");
     expect(production).toContain("Disallow: /app/");
     expect(production).toContain("Sitemap: https://launch.orangecloud.vn/sitemap.xml");
+    expect(production).toContain("Content-Signal: ai-train=no, search=yes, ai-input=no");
+    expect(production).toContain(
+      "Agentmap: https://launch.orangecloud.vn/.well-known/ai-catalog.json",
+    );
+    const staging = robotsTxt("launch-staging.orangecloud.vn");
+    expect(staging).toContain("Content-Signal: ai-train=no, search=no, ai-input=no");
+    expect(staging).toContain(
+      "Agentmap: https://launch-staging.orangecloud.vn/.well-known/ai-catalog.json",
+    );
   });
 
   it("lists the homepage in both languages", () => {
